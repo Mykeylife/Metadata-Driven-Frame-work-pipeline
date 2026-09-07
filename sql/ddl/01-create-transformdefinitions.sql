@@ -9,5 +9,10 @@ CREATE TABLE dbo.TransformDefinitions (
   CreatedAt DATETIME2 DEFAULT SYSUTCDATETIME()
 );
 
--- Example insert (only via vetted CI/PR):
--- INSERT INTO dbo.TransformDefinitions (TransformId, Description, ExecutionType, ExecutionTarget) VALUES ('TransformA','Example SP-based transform','StoredProc','dbo.usp_TransformA');
+-- Example inserts (these should be applied via a vetted deployment process / PR):
+INSERT INTO dbo.TransformDefinitions (TransformId, Description, ExecutionType, ExecutionTarget, AllowedParameters)
+VALUES
+('TransformA','SP-based example transform that reads from source and writes to sink','StoredProc','dbo.usp_TransformA', '{"params":["srcPath","sinkPath"]}'),
+('TransformB','DataFlow-based example transform','DataFlow','DataFlow_TransformB', '{"params":["srcPath","sinkPath"]}');
+
+-- Note: In production, do not allow direct inserts to this table by non-privileged users. Changes to TransformDefinitions should be managed via CI/PR and database migration scripts.

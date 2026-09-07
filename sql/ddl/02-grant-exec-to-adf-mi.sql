@@ -3,4 +3,6 @@
 -- Grant minimal permissions: SELECT on Metadata and TransformDefinitions, EXECUTE on vetted procedures
 GRANT SELECT ON dbo.Metadata TO [adf_mi_user];
 GRANT SELECT ON dbo.TransformDefinitions TO [adf_mi_user];
-GRANT EXECUTE ON SCHEMA :: dbo TO [adf_mi_user]; -- Prefer granting EXECUTE only on specific procs in production
+-- Grant EXECUTE only on approved stored procedures (prefer this to schema-wide EXECUTE)
+GRANT EXECUTE ON dbo.usp_TransformA TO [adf_mi_user];
+-- If you add more stored procedures, grant EXECUTE on those specific procs as well.
