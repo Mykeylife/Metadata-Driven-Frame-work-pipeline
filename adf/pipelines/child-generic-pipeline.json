@@ -1,0 +1,70 @@
+{
+  "name": "Child_Generic_Pipeline",
+  "properties": {
+    "parameters": {
+      "pipelineId": { "type": "String" },
+      "sourceType": { "type": "String" },
+      "sourcePath": { "type": "String" },
+      "sinkType": { "type": "String" },
+      "sinkPath": { "type": "String" },
+      "transformId": { "type": "String" },
+      "pipelineParameters": { "type": "Object" },
+      "parallelism": { "type": "Int", "defaultValue": 1 }
+    },
+    "activities": [
+      {
+        "name": "Switch_On_Transform",
+        "type": "Switch",
+        "typeProperties": {
+          "expression": { "value": "@pipeline().parameters.transformId", "type": "Expression" },
+          "cases": [
+            {
+              "value": "TransformA",
+              "activities": [
+                {
+                  "name": "Call_SP_TransformA",
+                  "type": "SqlServerStoredProcedure",
+                  "typeProperties": {
+                    "storedProcedureName": "dbo.usp_TransformA",
+                    "storedProcedureParameters": {
+                      "@srcPath": "@pipeline().parameters.sourcePath",
+                      "@sinkPath": "@pipeline().parameters.sinkPath"
+                    }
+                  },
+                  "linkedServiceName": {
+                    "referenceName": "AzureSqlLinkedService",
+                    "type": "LinkedServiceReference"
+                  }
+                }
+              ]
+            },
+            {
+              "value": "TransformB",
+              "activities": [
+                {
+                  "name": "Run_DataFlow_TransformB",
+                  "type": "DataFlow",
+                  "typeProperties": {
+                    "dataFlow": { "referenceName": "DataFlow_TransformB", "type": "DataFlowReference" },
+                    "parameters": {
+                      "srcPath": "@pipeline().parameters.sourcePath",
+                      "sinkPath": "@pipeline().parameters.sinkPath"
+                    }
+                  }
+                }
+              ]
+            }
+          ],
+          "defaultActivities": [
+            {
+              "name": "Fail_Invalid_Transform",
+              "type": "Fail",
+              "typeProperties": { "message": "Unknown transform id: @pipeline().parameters.transformId" }
+            }
+          ]
+        }
+      }
+    ],
+    "annotations": []
+  }
+}

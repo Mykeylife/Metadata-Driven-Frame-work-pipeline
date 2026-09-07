@@ -1,0 +1,30 @@
+{
+  "name": "Preflight_Validation_Pipeline",
+  "properties": {
+    "parameters": {
+      "metadataRow": { "type": "Object" }
+    },
+    "activities": [
+      {
+        "name": "ValidateTransformIdExists",
+        "type": "Lookup",
+        "typeProperties": {
+          "dataset": { "referenceName": "TransformDefinitionsDataset", "type": "DatasetReference" },
+          "firstRowOnly": true,
+          "source": { "type": "SqlSource", "sqlReaderQuery": "SELECT TOP 1 TransformId FROM dbo.TransformDefinitions WHERE TransformId = @pipeline().parameters.metadataRow.TransformId" }
+        }
+      },
+      {
+        "name": "FailIfMissing",
+        "type": "IfCondition",
+        "dependsOn": [ { "activity": "ValidateTransformIdExists", "dependencyConditions": ["Succeeded"] } ],
+        "typeProperties": {
+          "expression": { "value": "@equals(activity('ValidateTransformIdExists').output.firstRow, null)", "type": "Expression" },
+          "ifTrueActivities": [ { "name": "Fail_Invalid_Transform", "type": "Fail", "typeProperties": { "message": "TransformId not found or not allowed: @pipeline().parameters.metadataRow.TransformId" } } ],
+          "ifFalseActivities": []
+        }
+      }
+    ],
+    "annotations": []
+  }
+}

@@ -1,0 +1,38 @@
+name: Deploy ADF pipelines
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        required: true
+        default: dev
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Azure Login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+      - name: Install jq
+        run: sudo apt-get update && sudo apt-get install -y jq
+      - name: Deploy controller pipeline
+        env:
+          RG: ${{ secrets.ADF_RG }}
+          FACTORY: ${{ secrets.ADF_FACTORY }}
+        run: |
+          az deployment group create -g $RG --template-file infra/arm/adf-deploy-pipeline.json \
+            --parameters factoryName=$FACTORY pipelineName=Controller_Pipeline pipelineDefinition="$(jq '.' adf/pipelines/controller-pipeline.json)"
+      - name: Deploy child generic pipeline
+        env:
+          RG: ${{ secrets.ADF_RG }}
+          FACTORY: ${{ secrets.ADF_FACTORY }}
+        run: |
+          az deployment group create -g $RG --template-file infra/arm/adf-deploy-pipeline.json \
+            --parameters factoryName=$FACTORY pipelineName=Child_Generic_Pipeline pipelineDefinition="$(jq '.' adf/pipelines/child-generic-pipeline.json)"

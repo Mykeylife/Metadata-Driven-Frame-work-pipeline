@@ -1,0 +1,75 @@
+{
+  "name": "Controller_Pipeline",
+  "properties": {
+    "activities": [
+      {
+        "name": "Lookup_Metadata",
+        "type": "Lookup",
+        "typeProperties": {
+          "dataset": {
+            "referenceName": "MetadataDataset",
+            "type": "DatasetReference"
+          },
+          "firstRowOnly": false
+        }
+      },
+      {
+        "name": "ForEach_MetadataRow",
+        "type": "ForEach",
+        "dependsOn": [
+          {
+            "activity": "Lookup_Metadata",
+            "dependencyConditions": ["Succeeded"]
+          }
+        ],
+        "typeProperties": {
+          "items": "@activity('Lookup_Metadata').output.value",
+          "isSequential": false,
+          "activities": [
+            {
+              "name": "Validate_And_Execute",
+              "type": "ExecutePipeline",
+              "typeProperties": {
+                "pipeline": {
+                  "referenceName": "Preflight_Validation_Pipeline",
+                  "type": "PipelineReference"
+                },
+                "waitOnCompletion": true,
+                "parameters": {
+                  "metadataRow": "@item()"
+                }
+              }
+            },
+            {
+              "name": "Execute_Child_Generic",
+              "type": "ExecutePipeline",
+              "dependsOn": [
+                {
+                  "activity": "Validate_And_Execute",
+                  "dependencyConditions": ["Succeeded"]
+                }
+              ],
+              "typeProperties": {
+                "pipeline": {
+                  "referenceName": "Child_Generic_Pipeline",
+                  "type": "PipelineReference"
+                },
+                "parameters": {
+                  "pipelineId": "@item().PipelineId",
+                  "sourceType": "@item().SourceType",
+                  "sourcePath": "@item().SourcePath",
+                  "sinkType": "@item().SinkType",
+                  "sinkPath": "@item().SinkPath",
+                  "transformId": "@item().TransformId",
+                  "pipelineParameters": "@item().PipelineParameters",
+                  "parallelism": "@item().Parallelism"
+                }
+              }
+            }
+          ]
+        }
+      }
+    ],
+    "annotations": []
+  }
+}

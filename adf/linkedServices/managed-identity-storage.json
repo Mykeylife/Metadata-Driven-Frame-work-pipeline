@@ -1,0 +1,9 @@
+{
+  "name": "AzureStorageLinkedService",
+  "properties": {
+    "type": "AzureBlobStorage",
+    "typeProperties": {
+      "connectionString": "DefaultEndpointsProtocol=https;AccountName=REPLACE;"
+    }
+  }
+}

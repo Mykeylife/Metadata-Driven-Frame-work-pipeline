@@ -1,0 +1,14 @@
+name: Validate metadata references
+
+on:
+  workflow_dispatch:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate TransformDefinitions presence (local check)
+        run: |
+          echo "This job should connect to your Metadata store and validate that every TransformId referenced in metadata exists in TransformDefinitions." 
+          echo "Implement a check script or run a SQL query that joins Metadata -> TransformDefinitions and fail if any missing rows are found."

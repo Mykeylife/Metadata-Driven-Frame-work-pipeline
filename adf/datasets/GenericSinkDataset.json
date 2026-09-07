@@ -1,0 +1,9 @@
+{
+  "name": "GenericSinkDataset",
+  "properties": {
+    "linkedServiceName": { "referenceName": "AzureStorageLinkedService", "type": "LinkedServiceReference" },
+    "parameters": { "path": { "type": "String" } },
+    "type": "AzureBlob",
+    "typeProperties": { "fileName": "@dataset().path", "format": { "type": "TextFormat" } }
+  }
+}

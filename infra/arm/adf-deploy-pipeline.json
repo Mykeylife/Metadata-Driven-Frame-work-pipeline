@@ -1,0 +1,17 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "factoryName": { "type": "string" },
+    "pipelineName": { "type": "string" },
+    "pipelineDefinition": { "type": "object" }
+  },
+  "resources": [
+    {
+      "name": "[concat(parameters('factoryName'), '/', parameters('pipelineName'))]",
+      "type": "Microsoft.DataFactory/factories/pipelines",
+      "apiVersion": "2018-06-01",
+      "properties": "[parameters('pipelineDefinition')]"
+    }
+  ]
+}
