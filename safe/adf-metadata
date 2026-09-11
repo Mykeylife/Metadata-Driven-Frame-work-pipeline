@@ -1,0 +1,271 @@
+name: Build and test (HEAD)
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jq docker-compose curl apt-transport-https gnupg
+      - name: Lint JSON files
+        run: |
+          set -e
+          find adf -name '*.json' -print0 | xargs -0 -n1 jq empty
+      - name: Start local SQL Server (docker-compose)
+        run: |
+          docker-compose up -d mssql
+          # Wait for healthcheck
+          for i in {1..60}; do
+            STATUS=$(docker inspect --format='{{json .State.Health.Status}}' mssql_local || true)
+            echo "mssql health: $STATUS"
+            if [[ "$STATUS" == '"healthy"' ]]; then
+              echo "SQL Server is healthy"
+              break
+            fi
+            sleep 5
+            if [[ $i -eq 60 ]]; then
+              echo "SQL Server did not become healthy"; docker logs mssql_local; exit 1
+            fi
+          done
+      - name: Install sqlcmd (mssql-tools)
+        run: |
+          sudo ACCEPT_EULA=Y apt-get install -y curl apt-transport-https gnupg
+          curl https://packages.microsoft.com/keys/microsoft.asc | sudo apt-key add -
+          curl https://packages.microsoft.com/config/ubuntu/20.04/prod.list | sudo tee /etc/apt/sources.list.d/msprod.list
+          sudo apt-get update
+          sudo ACCEPT_EULA=Y apt-get install -y mssql-tools unixodbc-dev
+          echo 'export PATH="$PATH:/opt/mssql-tools/bin"' >> $GITHUB_ENV
+      - name: Run SQL migrations against local SQL
+        env:
+          SQL_SERVER: localhost
+          SQL_DATABASE: master
+          SQL_USER: SA
+          SQL_PASSWORD: 'YourStrong!Passw0rd'
+        run: |
+          set -euo pipefail
+          /opt/mssql-tools/bin/sqlcmd -S "$SQL_SERVER" -U "$SQL_USER" -P "$SQL_PASSWORD" -i sql/ddl/01-create-transformdefinitions.sql
+          /opt/mssql-tools/bin/sqlcmd -S "$SQL_SERVER" -U "$SQL_USER" -P "$SQL_PASSWORD" -i sql/ddl/00-create-metadata-table.sql
+          /opt/mssql-tools/bin/sqlcmd -S "$SQL_SERVER" -U "$SQL_USER" -P "$SQL_PASSWORD" -i sql/ddl/03-create-sample-stored-procs.sql
+          /opt/mssql-tools/bin/sqlcmd -S "$SQL_SERVER" -U "$SQL_USER" -P "$SQL_PASSWORD" -i sql/ddl/02-grant-exec-to-adf-mi.sql
+      - name: Run integration tests (pytest)
+        run: |
+          sudo apt-get install -y python3-pip
+          pip3 install pytest
+          pytest -q
+      - name: Tear down
+        run: |
+          docker-compose down -v
+name: Run SQL migrations (ADF metadata)
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_sql:
+        description: 'Set to true to run migrations'
+        required: true
+        default: 'true'
+
+jobs:
+  run-migrations:
+    runs-on: ubuntu-latest
+    if: github.event.inputs.run_sql == 'true'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install sqlcmd (mssql-tools)
+        run: |
+          sudo apt-get update
+          sudo ACCEPT_EULA=Y apt-get install -y curl apt-transport-https \
+            gnupg && curl https://packages.microsoft.com/keys/microsoft.asc | sudo apt-key add -
+          curl https://packages.microsoft.com/config/ubuntu/20.04/prod.list | sudo tee /etc/apt/sources.list.d/msprod.list
+          sudo apt-get update
+          sudo ACCEPT_EULA=Y apt-get install -y mssql-tools unixodbc-dev
+          echo 'export PATH="$PATH:/opt/mssql-tools/bin"' >> $GITHUB_ENV
+      - name: Run migrations (order: transforms -> metadata -> procs -> grants)
+        env:
+          SQL_SERVER: ${{ secrets.SQL_SERVER }}
+          SQL_DATABASE: ${{ secrets.SQL_DATABASE }}
+          SQL_USER: ${{ secrets.SQL_USER }}
+          SQL_PASSWORD: ${{ secrets.SQL_PASSWORD }}
+        run: |
+          set -euo pipefail
+          echo "Running TransformDefinitions..."
+          /opt/mssql-tools/bin/sqlcmd -S "$SQL_SERVER" -d "$SQL_DATABASE" -U "$SQL_USER" -P "$SQL_PASSWORD" -i sql/ddl/01-create-transformdefinitions.sql
+          echo "Running Metadata table + FK..."
+          /opt/mssql-tools/bin/sqlcmd -S "$SQL_SERVER" -d "$SQL_DATABASE" -U "$SQL_USER" -P "$SQL_PASSWORD" -i sql/ddl/00-create-metadata-table.sql
+          echo "Running sample stored procedures..."
+          /opt/mssql-tools/bin/sqlcmd -S "$SQL_SERVER" -d "$SQL_DATABASE" -U "$SQL_USER" -P "$SQL_PASSWORD" -i sql/ddl/03-create-sample-stored-procs.sql
+          echo "Applying grants (adjust adf MI user name as needed)..."
+          /opt/mssql-tools/bin/sqlcmd -S "$SQL_SERVER" -d "$SQL_DATABASE" -U "$SQL_USER" -P "$SQL_PASSWORD" -i sql/ddl/02-grant-exec-to-adf-mi.sql
+      - name: Post-check (list TransformDefinitions)
+        env:
+          SQL_SERVER: ${{ secrets.SQL_SERVER }}
+          SQL_DATABASE: ${{ secrets.SQL_DATABASE }}
+          SQL_USER: ${{ secrets.SQL_USER }}
+          SQL_PASSWORD: ${{ secrets.SQL_PASSWORD }}
+        run: |
+          /opt/mssql-tools/bin/sqlcmd -S "$SQL_SERVER" -d "$SQL_DATABASE" -U "$SQL_USER" -P "$SQL_PASSWORD" -Q "SELECT TransformId,ExecutionType,ExecutionTarget FROM dbo.TransformDefinitions"
+version: '3.8'
+
+services:
+  mssql:
+    image: mcr.microsoft.com/mssql/server:2019-latest
+    container_name: mssql_local
+    environment:
+      - ACCEPT_EULA=Y
+      - SA_PASSWORD=YourStrong!Passw0rd
+    ports:
+      - "1433:1433"
+    healthcheck:
+      test: ["CMD-SHELL","/opt/mssql-tools/bin/sqlcmd -S localhost -U SA -P YourStrong!Passw0rd -Q \"SELECT 1\" >/dev/null 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 10s
+      retries: 12
+#!/usr/bin/env bash
+set -euo pipefail
+# Local test runner: bring up docker-compose and run migrations + tests
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/..
+cd "$SCRIPT_DIR"
+
+docker-compose up -d mssql
+# Wait for health
+for i in {1..60}; do
+  STATUS=$(docker inspect --format='{{json .State.Health.Status}}' mssql_local || true)
+  echo "mssql health: $STATUS"
+  if [[ "$STATUS" == '"healthy"' ]]; then
+    echo "SQL Server is healthy"
+    break
+  fi
+  sleep 5
+  if [[ $i -eq 60 ]]; then
+    echo "SQL Server did not become healthy"; docker logs mssql_local; exit 1
+  fi
+done
+
+# Install mssql-tools locally if needed
+if ! command -v sqlcmd >/dev/null 2>&1; then
+  echo "sqlcmd not found; please install mssql-tools (sqlcmd) before running this script locally"
+  exit 1
+fi
+
+export SQL_SERVER=localhost
+export SQL_USER=SA
+export SQL_PASSWORD='YourStrong!Passw0rd'
+export SQL_DATABASE=master
+
+/opt/mssql-tools/bin/sqlcmd -S "$SQL_SERVER" -U "$SQL_USER" -P "$SQL_PASSWORD" -i sql/ddl/01-create-transformdefinitions.sql
+/opt/mssql-tools/bin/sqlcmd -S "$SQL_SERVER" -U "$SQL_USER" -P "$SQL_PASSWORD" -i sql/ddl/00-create-metadata-table.sql
+/opt/mssql-tools/bin/sqlcmd -S "$SQL_SERVER" -U "$SQL_USER" -P "$SQL_PASSWORD" -i sql/ddl/03-create-sample-stored-procs.sql
+/opt/mssql-tools/bin/sqlcmd -S "$SQL_SERVER" -U "$SQL_USER" -P "$SQL_PASSWORD" -i sql/ddl/02-grant-exec-to-adf-mi.sql
+
+pytest -q
+
+docker-compose down -v
+#!/usr/bin/env python3
+"""
+Simple metadata validator that ensures parallelism does not exceed configured max and TransformId is allowed in sample TransformDefinitions (reads SQL via sqlcmd).
+"""
+import json
+import subprocess
+import sys
+import re
+
+MAX_PARALLELISM = 8
+
+
+def run_sql(query):
+    cmd = ['sqlcmd', '-S', 'localhost', '-U', 'SA', '-P', 'YourStrong!Passw0rd', '-Q', query, '-W', '-s',',']
+    out = subprocess.check_output(cmd, universal_newlines=True)
+    return out
+
+
+def main():
+    with open('metadata/sample-metadata.json') as f:
+        data = json.load(f)
+    for row in data['sample']:
+        p = row.get('Parallelism', 1)
+        if p > MAX_PARALLELISM:
+            print(f"Parallelism {p} exceeds max {MAX_PARALLELISM}")
+            sys.exit(2)
+        # Verify TransformId exists
+        t = row.get('TransformId')
+        out = run_sql(f"SET NOCOUNT ON; SELECT COUNT(*) FROM dbo.TransformDefinitions WHERE TransformId = '{t}'")
+        m = re.search(r"(\d+)", out)
+        count = int(m.group(1)) if m else 0
+        if count == 0:
+            print(f"TransformId {t} not found in TransformDefinitions")
+            sys.exit(3)
+    print("Metadata validation passed")
+
+if __name__ == '__main__':
+    main()
+{
+  "sample": [
+    {
+      "PipelineId": "pipeline_example_01",
+      "PipelineName": "Example pipeline",
+      "Enabled": true,
+      "SourceType": "Blob",
+      "SourcePath": "container/path/file.csv",
+      "SinkType": "Sql",
+      "SinkPath": "dbo.TargetTable",
+      "TransformId": "TransformA",
+      "PipelineParameters": { "param1": "value1" },
+      "Parallelism": 2
+    }
+  ]
+}
+import subprocess
+import sys
+import re
+
+def run_sql(query):
+    cmd = [
+        'sqlcmd', '-S', 'localhost', '-U', 'SA', '-P', 'YourStrong!Passw0rd', '-Q', query, '-W', '-s',',',
+    ]
+    out = subprocess.check_output(cmd, universal_newlines=True)
+    return out
+
+
+def test_transformdefinitions_exists():
+    out = run_sql("SET NOCOUNT ON; SELECT COUNT(*) FROM dbo.TransformDefinitions")
+    # sqlcmd outputs headers; find the number
+    m = re.search(r"(\d+)", out)
+    assert m, f"Unexpected output: {out}"
+    count = int(m.group(1))
+    assert count >= 1, "No TransformDefinitions found"
+
+
+def test_stored_proc_runs_and_audited():
+    # Call the sample stored procedure
+    run_sql("EXEC dbo.usp_TransformA @srcPath='src', @sinkPath='sink', @pipelineId='test'")
+    out = run_sql("SELECT COUNT(*) FROM dbo.TransformAudit WHERE PipelineId='test'")
+    m = re.search(r"(\d+)", out)
+    assert m, f"Unexpected output: {out}"
+    count = int(m.group(1))
+    assert count >= 1, "Stored procedure did not write audit row"
+# Contributing
+
+Thank you for contributing to the Metadata-Driven ADF Framework scaffold.
+
+Key rules to preserve genuine history and ensure safety:
+
+- All changes MUST be made via Pull Requests targeting main.
+- Do NOT force-push to main. Keep history intact; use small, focused commits.
+- Changes to TransformDefinitions must follow the PR template in docs/PR-template.md and include security review confirmation.
+- CI verifies the scaffold at HEAD; ensure your branch passes CI before requesting review.
+- Changes to SQL DDL require a DBA review; include migration scripts under sql/ddl/ and follow the deployment order.
+
+Branch protection suggestions (apply in repo Settings):
+- Require pull request reviews before merging (1+ approver)
+- Require status checks to pass (build-and-test)
+- Restrict who can push to main
+
