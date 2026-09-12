@@ -1,0 +1,23 @@
+{
+  "name": "metadata-driven-framework-pipeline",
+  "version": "1.0.0",
+  "description": "Metadata-driven ADF pipeline framework with secure-by-design templates, CI and DDL",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Mykeylife/Metadata-Driven-Frame-work-pipeline.git"
+  },
+  "keywords": [
+    "adf",
+    "pipeline",
+    "metadata-driven",
+    "azure"
+  ],
+  "author": "Mykeylife",
+  "license": "MIT",
+  "dependencies": {},
+  "devDependencies": {}
+}
