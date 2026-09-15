@@ -1,0 +1,41 @@
+name: Compile ADF Canvas JSON to ARM Templates
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  build-and-compile:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. Checkout the source code repository
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      # 2. Set up Node.js environment required by ADF utilities
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      # 3. Install the dependencies including @microsoft/azure-data-factory-utilities
+      - name: Install ADF Utilities
+        run: npm install
+
+      # 4. Validate and compile the raw ADF canvas JSON files into ARM Templates
+      - name: Validate and Compile ADF Code
+        run: |
+          mkdir -p build/arm-templates
+          node node_modules/@microsoft/azure-data-factory-utilities/lib/index.js export "$GITHUB_WORKSPACE/adf-src" "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-placeholder/providers/Microsoft.DataFactory/factories/adf-placeholder" "build/arm-templates"
+
+      # 5. Upload the compiled ARM templates as a secure build artifact
+      - name: Upload ARM Template Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: compiled-arm-templates
+          path: build/arm-templates/
+          
