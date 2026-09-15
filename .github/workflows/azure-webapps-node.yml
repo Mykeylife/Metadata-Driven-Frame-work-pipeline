@@ -29,7 +29,12 @@ jobs:
         with:
           name: compiled-templates
           path: . 
-- name: Run Framework Unit Tests
-  run: |
-    pip install pytest
-    pytest test_orchestrator.py -v
+      - name: Install Python Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run Framework Orchestrator Unit Tests
+        run: |
+          pytest test_orchestrator.py -v
+
