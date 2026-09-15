@@ -29,5 +29,7 @@ jobs:
         with:
           name: compiled-templates
           path: . 
-
-        
+- name: Run Framework Unit Tests
+  run: |
+    pip install pytest
+    pytest test_orchestrator.py -v
