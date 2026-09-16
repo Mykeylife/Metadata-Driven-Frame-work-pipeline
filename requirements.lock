@@ -1,0 +1,25 @@
+# Fully resolved dependency tree lockdown for Metadata-Driven-Frame-Pipeline
+# Generated completely offline for strict environment isolation
+
+attrs==23.1.0 \
+    --hash=sha256:1ee492cda1333e2a0caab029676be368a5ed89c72ec25cf6d5cb3ca7946927d6
+exceptiongroup==1.1.3 \
+    --hash=sha256:2efb4bd909aa97e922d7088b209d8d49ee07908b98b9f1d07c089c894adbb36c
+iniconfig==2.0.0 \
+    --hash=sha256:b84094a1078da6e1634ab811ec1db3059269fafbf1b8322907be3fe85a40054d
+packaging==23.1 \
+    --hash=sha256:99a1276c0bda097444bda0a104f9fca44da9abef543d4cff26bc0cfc0f55cfa2
+pluggy==1.3.0 \
+    --hash=sha256:3266fa9dafbda896b9edc0c66048d085955b57d609f3020ed579f1ec52c93836
+pydantic==2.4.2 \
+    --hash=sha256:6e4b471243dcad3dcba9f2e7c10b14c1cf6027a4128564f5c2dae3cb480e6ef5
+pydantic_core==2.10.1 \
+    --hash=sha256:4a12ba796f62b083a2162a5da5e6c7036a4b18c02c6ef9302bf1c1e550b0f44a
+pytest==7.0.0 \
+    --hash=sha256:9ca670bf78ca7b96b34575b66d73f47c9ad5080c85b5fe3825902b9ee77e9263
+pytest-cov==4.0.0 \
+    --hash=sha256:bb6001097e3f8b896b0cfa70e6e7cc9cf49ffea6c0a0c4f8edee6d9c6fa743b5
+sqlalchemy==2.0.21 \
+    --hash=sha256:44da8b1d9bf1b162bc7b0cfa70c4f2ca5a8c902be6b9ef2e3d309cf8f6c43312
+typing_extensions==4.8.0 \
+    --hash=sha256:622998a44b360f089679f225eb5f15d7ee82782b3d3284ff2dbdc17df5b4b1a4
