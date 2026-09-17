@@ -42,3 +42,16 @@ jobs:
     - name: Run tests with code coverage
       run: |
         pytest --cov=. --cov-report=term-missing --cov-fail-under=70
+    - name: Check formatting with Black
+      run: black --check adf-src/
+
+    - name: Lint with flake8
+      run: flake8 adf-src/
+
+    - name: Static type check with Mypy
+      run: mypy adf-src/
+
+    - name: Run tests with code coverage
+      run: |
+        pytest --cov=adf-src/ --cov-report=term-missing --cov-fail-under=70
+        
