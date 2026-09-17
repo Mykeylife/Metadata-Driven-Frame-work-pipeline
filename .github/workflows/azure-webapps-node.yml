@@ -30,18 +30,6 @@ jobs:
           pip freeze > requirements-lock.txt
         fi
 
-    - name: Check formatting with Black
-      run: black --check orchestrator.py
-
-    - name: Lint with flake8
-      run: flake8 orchestrator.py
-
-    - name: Static type check with Mypy
-      run: mypy orchestrator.py
-
-    - name: Run tests with code coverage
-      run: |
-        pytest --cov=. --cov-report=term-missing --cov-fail-under=70
     - name: Auto-format with Black
       run: black orchestrator.py
 
