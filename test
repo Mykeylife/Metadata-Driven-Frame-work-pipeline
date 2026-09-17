@@ -1,0 +1,18 @@
+import pytest
+from orchestrator import run_orchestration, PipelineExecutionError
+
+def test_orchestration_happy_path() -> None:
+    """Verifies that valid pipeline inputs return a successful execution code state."""
+    sample_payload = {"pipeline_id": "AZ-001", "source": "local_sqlite"}
+    result = run_orchestration(sample_payload)
+    assert result == "Success"
+
+def test_orchestration_empty_payload_raises_error() -> None:
+    """Ensures blank parameters throw custom validation exception objects with clean attributes."""
+    blank_payload: dict = {}
+    
+    with pytest.raises(PipelineExecutionError) as exc_info:
+        run_orchestration(blank_payload)
+        
+    assert exc_info.value.details.error_type == "ValidationError"
+    assert "cannot be blank" in exc_info.value.details.message
