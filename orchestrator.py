@@ -47,3 +47,10 @@ def run_orchestration(payload: Dict[str, Any]) -> str:
         logger.error(f"Unexpected architectural failure: {error_info.message}")
         raise PipelineExecutionError(error_info)
 
+# Do this (Explicitly typed):
+def calculate_routes(config_path: str) -> bool:
+    return True
+
+# NOT this (Untyped - will fail the build):
+def calculate_routes(config_path):
+    return True
