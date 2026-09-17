@@ -42,3 +42,15 @@ jobs:
     - name: Run tests with code coverage
       run: |
         pytest --cov=. --cov-report=term-missing --cov-fail-under=70
+    - name: Auto-format with Black
+      run: black orchestrator.py
+
+    - name: Lint with flake8 (Non-blocking)
+      run: flake8 orchestrator.py || true
+
+    - name: Static type check with Mypy (Non-blocking)
+      run: mypy orchestrator.py || true
+
+    - name: Run tests with code coverage
+      run: |
+        pytest --cov=. --cov-report=term-missing --cov-fail-under=50
