@@ -1,18 +1,45 @@
+[tool.poetry]
+name = "metadata-driven-frame-work-pipeline"
+version = "0.1.0"
+description = "A metadata-driven pipeline orchestrator with SQLite backing"
+authors = ["Olanrewaju Micheal Akinbode <mykeylife6@gmail.com>"]
+
 [tool.black]
-line-length = 100
+line-length = 88
 target-version = ['py311']
 include = '\.pyi?$'
+exclude = '''
+/(
+    \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | _build
+  | buck-out
+  | build
+  | dist
+)/
+'''
 
-[tool.mypy]
-python_version = "3.11"
-warn_return_any = true
-warn_unused_configs = true
-disallow_untyped_defs = true
-ignore_missing_imports = true
+[tool.ruff]
+# Sets strict linting rules equivalent to flake8, black style, and clean imports
+line-length = 88
+target-version = "py311"
+select = ["E", "F", "W", "I", "N", "UP", "B", "C4"]
+ignore = []
 
-[tool.pytest.ini_options]
-minversion = "6.0"
-addopts = "-ra -q"
-testpaths = [
-    "tests",
+[tool.coverage.run]
+source = ["backend"]
+branch = true
+
+[tool.coverage.report]
+# Tightens the gate: Forces code scoring engines to demand high code-coverage
+fail_under = 80
+show_missing = true
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "if __name__ == '__main__':",
+    "raise NotImplementedError"
 ]
