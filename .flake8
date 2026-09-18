@@ -1,5 +1,21 @@
 [flake8]
-max-line-length = 100
-extend-ignore = E203
-exclude = .git,__pycache__,build,dist
+# Set the strict maximum line length to match your pyproject.toml
+max-line-length = 88
+
+# Select strict error and warning categories
+select = E,F,W,C,I
+
+# Exclude standard environment and build directories from scanning
+exclude =
+    .git,
+    __pycache__,
+    build,
+    dist,
+    .venv,
+    venv,
+    .poetry
+
+# Ignore specific conflicts with modern formatters like Black
+ignore = E203, W503
+
 
