@@ -1,79 +1,61 @@
-# Metadata-Driven Framework Pipeline
+# Metadata-Driven Azure Data Factory Pipeline Framework
 
-A production-scaffolded, enterprise-ready **Data Engineering framework** showcasing a modular, metadata-driven architecture for orchestrating data pipelines. This project is built to execute, validate, and compile completely **locally and offline**, cutting out cloud subscription costs while retaining strict automated enterprise CI/CD verification standards.
+A high-performance, self-contained Python orchestration engine built to manage dynamic, metadata-driven data injection pipelines completely offline. 
 
----
-
-## 🚀 Key Features
-
-* **Metadata-Driven Architecture:** Pipeline orchestration logic is cleanly separated from configurations, driven entirely by database control tables and parameterized schemas.
-* **100% Local Validation & Testing:** Leverages local lightweight environments and containerization to mimic enterprise operations seamlessly without an Azure subscription.
-* **Automated CI Build & Verification:** Integrated GitHub Actions workflow that automatically triggers on every main-branch push to install Node dependencies, validate configuration compliance, and compile raw assets into deployable infrastructure modules.
-* **Zero-Cost Scaffold:** Built using purely open-source utilities and local integration mocks to ensure predictability and absolute data isolation during development.
+This repository leverages an automated validation ecosystem, isolated state schemas, and built-in execution ledgers to guarantee absolute data reliability before code deployments.
 
 ---
 
-## 🛠️ Tech Stack & Scaffolding
+## 🏗️ Architectural Core
 
-* **Orchestration Configurations:** Raw canvas JSON architectures ready for Azure Data Factory integration schemas.
-* **Build Automation & Compiler:** Node.js 18 + `@microsoft/azure-data-factory-utilities`
-* **CI/CD Automation:** GitHub Actions (`.github/workflows/`)
-* **Local Engine Environment:** Python testing suite (`pytest`) + local SQL metadata configurations.
+The pipeline framework shifts operational parameters away from static script files and shifts them directly into a dynamic relational data structure. 
 
----
-
-## 📂 Project Architecture
-
-```text
-├── .github/workflows/
-│   └── azure-webapps-node.yml   # Optimized automated CI validation & build workflow
-├── adf-src/                     # Dedicated folder holding raw modular pipeline JSON files
-├── publish_config.json          # Deployment configuration placeholder for canvas mapping
-├── package.json                 # Node orchestration dependencies and compiler configurations
-├── package-lock.json            # Strict project version pinning file
-├── requirements.txt            # Python development and local testing packages
-└── README.md                    # Project blueprint and documentation
-```
+### 🗄️ Control Ledger Models
+* **`pipeline_metadata`**: Stores the absolute boundaries for master workflows, handling data capture structures, target tables, and operational strategies (`INCREMENTAL` or `FULL`).
+* **`pipeline_parameters`**: Manages granular operational thresholds like chunk limitations, thread sizes, and API tokens safely.
+* **`pipeline_execution_logs`**: Tracks operational status metrics (`RUNNING`, `SUCCESS`, `FAILED`), data ingestion quantities, execution windows, and debugging traces automatically.
 
 ---
 
-## ⚙️ Automated Integration Pipeline
+## 🛠️ Getting Started & Local Onboarding
 
-The repository uses a local-first **GitHub Actions runner** that acts as an enterprise quality gate. Every single commit is rigorously validated through the following automated steps:
+### 📋 System Prerequisites
+* Python 3.10 or higher
+* SQLite3 database engine (Built-in standard library layer)
 
-1. **Environment Setup:** Configures a clean Ubuntu environment spinning up Node.js 18.
-2. **Dependency Tree Lockdown:** Runs strict package tree installation based directly off your lockfile.
-3. **Compilation & Artifact Gen:** Executes the local validation utility compiler to aggregate raw configuration files into singular, structurally sound deployment schemas.
-4. **Secure Artifact Storage:** Securely zips and uploads the production-ready build template artifacts within GitHub directly.
+### ⚙️ Quick Installation Setup
+1. Clone the orchestration workspace directly to your local development station:
+   ```bash
+   git clone https://github.com
+   cd Metadata-Driven-Frame-work-pipeline
+   ```
+
+2. Establish an isolated virtual framework environment and activate it:
+   ```bash
+   python -m venv .venv
+   source .venv/bin/activate  # On Windows use: .venv\Scripts\activate
+   ```
+
+3. Deploy dependencies directly from the system lock profile:
+   ```bash
+   pip install -r requirements-lock.txt
+   ```
 
 ---
 
-## 💻 How to Run & Validate Locally
+## 🧪 Verification Engine & CI/CD Pipeline
 
-### 1. Prerequisite Installations
-Ensure your local development computer has the following tools installed:
-* [Node.js (v18 or higher)](https://nodejs.org)
-* [Python (v3.9 or higher)](https://python.org)
+This workspace executes full quality validations automatically on every code change to guarantee production readiness.
 
-### 2. Install Compilation Utilities
-Clone the repository and install the development dependencies to activate the offline validation environment:
+### 🏃 Running Quality Verifications Locally
+Execute the testing matrix and capture comprehensive code coverage indicators cleanly out of the terminal:
 ```bash
-npm install
-pip install -r requirements.txt
+pytest --cov=adf-src/ --cov-report=term-missing
 ```
 
-### 3. Compile the Infrastructure Locally
-You can manually replicate the identical automation steps executed by the GitHub green-lit CI/CD pipeline right on your local machine by running:
-```bash
-npm run adf-build
-```
-This utility command tests your raw structure configurations and outputs compiled templates inside a localized `build/` directory without connecting to the internet.
-
----
-
-## 📈 Enterprise Extensibility
-
-This project is built directly to modern infrastructure-as-code principles. If your team or organization decides to link this framework to a live enterprise ecosystem:
-1. Connect your **Azure Data Factory Studio canvas** directly to this GitHub repository.
-2. Set your workspace root folder target mapping specifically to `/adf-src`.
-3. The built-in placeholders (like `publish_config.json`) will instantly enable automated UI canvas synchronization into your cloud repository.
+### 🤖 CI/CD Automation Matrix
+Our GitHub Actions pipeline continuously verifies codebase health via isolated workflows:
+* **Formatting Controls**: Handled on the fly by `black` styles.
+* **Syntax Standardization Validation**: Checked uniformly by `flake8`.
+* **Static Coding Type Validations**: Analyzed explicitly via `mypy`.
+* **Automated Unit Tests Execution**: Executed independently over temporary, zero-cost memory models inside the container runner.
