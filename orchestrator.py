@@ -1,106 +1,113 @@
+import os
 import sqlite3
-import uuid
 import logging
 from datetime import datetime
-from typing import Any, Dict, Optional
-from pydantic import BaseModel, Field
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
-logger = logging.getLogger("metadata_orchestrator")
+# Configure structured system logging
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    handlers=[logging.StreamHandler()]
+)
 
-class PipelineConfig(BaseModel):
-    pipeline_id: str
-    pipeline_name: str
-    source_type: str
-    target_path: str
+def validate_pipeline_target(pipeline_name: str) -> bool:
+    """Validates that the requested pipeline name meets structural criteria."""
+    if not pipeline_name or len(pipeline_name.strip()) < 3:
+        logging.error(f"Validation failed: Invalid pipeline name structure '{pipeline_name}'")
+        return False
+    return True
 
-class OrchestratorDB:
-    def __init__(self, db_path: str = "metadata_control.db"):
-        self.db_path = db_path
-        self._init_database()
+def log_execution_step(cursor, run_id: str, step_name: str, level: str, message: str):
+    """Writes detailed engineering tracking footprints directly into execution_logs."""
+    try:
+        timestamp = datetime.utcnow().isoformat()
+        cursor.execute(
+            """
+            INSERT INTO execution_logs (run_id, step_name, log_level, message, timestamp)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (run_id, step_name, level, message, timestamp)
+        )
+    except sqlite3.Error as db_err:
+        logging.error(f"Failed to write footprint to execution_logs: {db_err}")
 
-    def _init_database(self) -> None:
-        """Initializes tables locally if they do not exist yet."""
-        with sqlite3.connect(self.db_path) as conn:
-            cursor = conn.cursor()
-            # Dynamic generation matching our sql schema definition
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS adf_pipelines (
-                    pipeline_id TEXT PRIMARY KEY, pipeline_name TEXT NOT NULL,
-                    source_type TEXT NOT NULL, target_path TEXT NOT NULL, is_active INTEGER DEFAULT 1
-                )
-            """)
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS adf_execution_logs (
-                    run_id TEXT PRIMARY KEY, pipeline_id TEXT NOT NULL, status TEXT NOT NULL,
-                    started_at TEXT NOT NULL, completed_at TEXT, records_processed INTEGER DEFAULT 0, error_message TEXT
-                )
-            """)
-            # Auto-seed baseline configuration mapping rule if table empty
-            cursor.execute("SELECT COUNT(*) FROM adf_pipelines")
-            if cursor.fetchone()[0] == 0:
-                cursor.execute("""
-                    INSERT INTO adf_pipelines (pipeline_id, pipeline_name, source_type, target_path)
-                    VALUES ('PL_SM_001', 'Social_Media_API_Ingestion', 'API', '/data/output/social_media/')
-                """)
-            conn.commit()
+def run_pipeline(run_id: str, db_conn=None) -> str:
+    """
+    Orchestrates a metadata-driven pipeline run lifecycle.
+    Fetches pending tracks, runs execution iterations with retries, and records steps.
+    """
+    if not run_id:
+        return "FAILED"
 
-    def get_pipeline_config(self, pipeline_id: str) -> Optional[PipelineConfig]:
-        """Fetches active metadata rules configuration directly out of SQLite memory framework."""
-        with sqlite3.connect(self.db_path) as conn:
-            conn.row_factory = sqlite3.Row
-            cursor = conn.cursor()
-            cursor.execute("SELECT * FROM adf_pipelines WHERE pipeline_id = ? AND is_active = 1", (pipeline_id,))
-            row = cursor.fetchone()
-            if row:
-                return PipelineConfig(
-                    pipeline_id=row["pipeline_id"],
-                    pipeline_name=row["pipeline_name"],
-                    source_type=row["source_type"],
-                    target_path=row["target_path"]
-                )
-        return None
-
-    def start_log(self, pipeline_id: str) -> str:
-        run_id = str(uuid.uuid4())
-        with sqlite3.connect(self.db_path) as conn:
-            conn.cursor().execute(
-                "INSERT INTO adf_execution_logs (run_id, pipeline_id, status, started_at) VALUES (?, ?, 'RUNNING', ?)",
-                (run_id, pipeline_id, datetime.utcnow().isoformat())
-            )
-            conn.commit()
-        return run_id
-
-    def end_log(self, run_id: str, status: str, records: int = 0, error: str = None) -> None:
-        with sqlite3.connect(self.db_path) as conn:
-            conn.cursor().execute(
-                "UPDATE adf_execution_logs SET status = ?, completed_at = ?, records_processed = ?, error_message = ? WHERE run_id = ?",
-                (status, datetime.utcnow().isoformat(), records, error, run_id)
-            )
-            conn.commit()
-
-def run_orchestration(pipeline_id: str) -> str:
-    """Core runtime managing tracking operations through local SQLite validation structures."""
-    db = OrchestratorDB()
-    config = db.get_pipeline_config(pipeline_id)
-    
-    if not config:
-        logger.error(f"Execution rejected: Pipeline configuration ID '{pipeline_id}' not found or inactive.")
-        return "Rejected"
-
-    run_id = db.start_log(pipeline_id)
-    logger.info(f"Initialized Run ID: {run_id} for Pipeline: {config.pipeline_name}")
+    # Use existing test connection or initialize a standard persistent db link
+    conn = db_conn if db_conn else sqlite3.connect("pipeline_metadata.db")
+    cursor = conn.cursor()
 
     try:
-        # Mock execution logic (e.g., Calling your Social Media API endpoints, transforming schema parameters)
-        logger.info(f"Extracting target parameters via source engine: {config.source_type}...")
+        # 1. Fetch current runtime metadata state
+        cursor.execute(
+            "SELECT pipeline_name, status FROM pipeline_metadata WHERE run_id = ?", 
+            (run_id,)
+        )
+        row = cursor.fetchone()
+
+        if not row:
+            logging.error(f"Execution aborted: run_id '{run_id}' not found in metadata warehouse.")
+            return "FAILED"
+
+        pipeline_name, status = row[0], row[1]
         
-        # Complete transaction record successfully
-        db.end_log(run_id=run_id, status="SUCCESS", records=150)
-        logger.info(f"Pipeline Run {run_id} finalized successfully.")
-        return "Success"
+        if not validate_pipeline_target(pipeline_name):
+            log_execution_step(cursor, run_id, "VALIDATION", "CRITICAL", "Invalid pipeline configurations.")
+            return "FAILED"
+
+        # 2. Update status to RUNNING and log startup sequence
+        start_time = datetime.utcnow().isoformat()
+        cursor.execute(
+            "UPDATE pipeline_metadata SET status = 'RUNNING', started_at = ? WHERE run_id = ?",
+            (start_time, run_id)
+        )
+        conn.commit()
+        log_execution_step(cursor, run_id, "INITIALIZATION", "INFO", f"Started orchestrating {pipeline_name}")
+
+        # 3. Simulated Execution Loop with Automated Error Recovery Retries
+        max_retries = 3
+        execution_success = False
         
-    except Exception as exc:
-        db.end_log(run_id=run_id, status="FAILED", error=str(exc))
-        logger.error(f"Pipeline Run {run_id} failed: {str(exc)}")
-        return "Failure"
+        for attempt in range(1, max_retries + 1):
+            log_execution_step(cursor, run_id, "EXECUTION_LOOP", "DEBUG", f"Running iteration step (Attempt {attempt}/{max_retries})")
+            
+            # Placeholder representing standard operational tasks (e.g., file moves, staging loads)
+            if attempt < 2:  # Simulate a temporary network or locking blip on early tries
+                log_execution_step(cursor, run_id, "EXECUTION_LOOP", "WARNING", f"Temporary connector latency detected on attempt {attempt}")
+                continue
+            
+            execution_success = True
+            break
+
+        # 4. Finalize state based on execution iteration outcomes
+        end_time = datetime.utcnow().isoformat()
+        if execution_success:
+            cursor.execute(
+                "UPDATE pipeline_metadata SET status = 'SUCCESS', ended_at = ? WHERE run_id = ?",
+                (end_time, run_id)
+            )
+            log_execution_step(cursor, run_id, "FINALIZATION", "INFO", "Pipeline lifecycle completed cleanly.")
+            final_status = "SUCCESS"
+        else:
+            cursor.execute(
+                "UPDATE pipeline_metadata SET status = 'FAILED', ended_at = ? WHERE run_id = ?",
+                (end_time, run_id)
+            )
+            log_execution_step(cursor, run_id, "FINALIZATION", "ERROR", "Pipeline execution chain breached.")
+            final_status = "FAILED"
+
+        conn.commit()
+        return final_status
+
+    except sqlite3.Error as error:
+        logging.critical(f"Orchestration engine runtime crash: {error}")
+        return "FAILED"
+    finally:
+        if not db_conn:
+            conn.close()
