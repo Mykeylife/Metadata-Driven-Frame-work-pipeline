@@ -1,6 +1,5 @@
-# Core Python package dependencies for Metadata Orchestrator
-sqlite3; python_version >= "3.11"
 coverage==7.4.4
 black==24.2.0
 flake8==7.0.0
 ruff==0.3.0
+
