@@ -1,61 +1,94 @@
-# Metadata-Driven Azure Data Factory Pipeline Framework
+# Metadata-Driven Framework Pipeline
 
-A high-performance, self-contained Python orchestration engine built to manage dynamic, metadata-driven data injection pipelines completely offline. 
-
-This repository leverages an automated validation ecosystem, isolated state schemas, and built-in execution ledgers to guarantee absolute data reliability before code deployments.
+A highly scalable, production-grade local pipeline orchestration engine built entirely in **Python** with an offline **SQLite** metadata control store and execution database tracking architecture.
 
 ---
 
-## 🏗️ Architectural Core
+## 1. Project Overview
 
-The pipeline framework shifts operational parameters away from static script files and shifts them directly into a dynamic relational data structure. 
+This framework is a **completely local and offline** metadata-driven pipeline orchestrator designed to decouple core pipeline control flows from individual execution steps. Instead of hardcoding task lifecycles, execution properties, routing, and data paths are driven entirely by localized database parameters.
 
-### 🗄️ Control Ledger Models
-* **`pipeline_metadata`**: Stores the absolute boundaries for master workflows, handling data capture structures, target tables, and operational strategies (`INCREMENTAL` or `FULL`).
-* **`pipeline_parameters`**: Manages granular operational thresholds like chunk limitations, thread sizes, and API tokens safely.
-* **`pipeline_execution_logs`**: Tracks operational status metrics (`RUNNING`, `SUCCESS`, `FAILED`), data ingestion quantities, execution windows, and debugging traces automatically.
+### Key Engineering Features
+* **Zero Cloud Dependencies:** Operates 100% locally and offline—built specifically to optimize computational workflows without relying on pay-as-you-go cloud architectures.
+* **Decoupled Architecture:** Orchestrates data task flows dynamically through parameterized database records.
+* **Robust Automated Error Handling:** Features a multi-stage task runner equipped with localized execution failure recovery and automated retries.
+* **Comprehensive Audit Trail:** Implements structured logging that writes atomic footprints into a centralized local execution warehouse.
 
 ---
 
-## 🛠️ Getting Started & Local Onboarding
+## 2. Core Architecture & Database Schema
 
-### 📋 System Prerequisites
-* Python 3.10 or higher
-* SQLite3 database engine (Built-in standard library layer)
+The orchestration engine manages pipeline life cycles by querying and updating two critical, tightly coupled tables inside a local `pipeline_metadata.db` database file:
 
-### ⚙️ Quick Installation Setup
-1. Clone the orchestration workspace directly to your local development station:
+### A. `pipeline_metadata` (The Control Table)
+Tracks the overarching state and execution boundaries of registered pipeline blocks.
+* `run_id` (TEXT, PK): Unique identification string for an explicit execution run.
+* `pipeline_name` (TEXT): Name descriptor of the target workflow block.
+* `status` (TEXT): Runtime states (`PENDING`, `RUNNING`, `SUCCESS`, `FAILED`).
+* `started_at` (TEXT): ISO-8601 UTC initialization timestamp footprint.
+* `ended_at` (TEXT): ISO-8601 UTC completion timestamp footprint.
+
+### B. `execution_logs` (The Logging Table)
+Captures granular, multi-stage debugging and runtime execution history linked directly to the parent runner.
+* `log_id` (INTEGER, PK): Auto-incrementing identifier tracking individual task milestones.
+* `run_id` (TEXT, FK): Maps logs directly back to their associated metadata control table.
+* `step_name` (TEXT): Concrete operational phase being performed (e.g., `VALIDATION`, `INITIALIZATION`).
+* `log_level` (TEXT): Severity layers (`DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL`).
+* `message` (TEXT): Detailed descriptive summary of the localized runtime footprint.
+* `timestamp` (TEXT): Explicit timestamp recorded upon data entry.
+
+---
+
+## 3. Local Workspace Setup Guide
+
+### System Requirements
+* **Python 3.11+**
+* **Poetry** (or a local dependency builder mapping via standard packaging utilities)
+
+### Installation
+1. Clone this repository directly into your local machine environment:
    ```bash
-   git clone https://github.com
+   git clone https://github.com/Mykeylife/Metadata-Driven-Frame-work-pipeline.git
    cd Metadata-Driven-Frame-work-pipeline
    ```
 
-2. Establish an isolated virtual framework environment and activate it:
+2. Establish dependencies and lock environments using Poetry:
    ```bash
-   python -m venv .venv
-   source .venv/bin/activate  # On Windows use: .venv\Scripts\activate
+   poetry install
    ```
-
-3. Deploy dependencies directly from the system lock profile:
-   ```bash
-   pip install -r requirements-lock.txt
-   ```
+   *(Alternatively, run `pip install -r requirements.txt` to align tools within raw python runtime containers).*
 
 ---
 
-## 🧪 Verification Engine & CI/CD Pipeline
+## 4. Test Suite Execution & Code Quality Gates
 
-This workspace executes full quality validations automatically on every code change to guarantee production readiness.
+This repository enforces strict code quality and linting baselines verified continuously through a localized automated CI framework.
 
-### 🏃 Running Quality Verifications Locally
-Execute the testing matrix and capture comprehensive code coverage indicators cleanly out of the terminal:
+### Running Local Unit Tests
+Validate execution mocks, logic paths, and database schema connections by invoking:
 ```bash
-pytest --cov=adf-src/ --cov-report=term-missing
+poetry run coverage run -m unittest discover
 ```
 
-### 🤖 CI/CD Automation Matrix
-Our GitHub Actions pipeline continuously verifies codebase health via isolated workflows:
-* **Formatting Controls**: Handled on the fly by `black` styles.
-* **Syntax Standardization Validation**: Checked uniformly by `flake8`.
-* **Static Coding Type Validations**: Analyzed explicitly via `mypy`.
-* **Automated Unit Tests Execution**: Executed independently over temporary, zero-cost memory models inside the container runner.
+### Viewing Code Quality Coverage Reports
+Ensure that total project test coverage stays strictly above the required **80% quality gate** baseline:
+```bash
+poetry run coverage report
+```
+
+### Formatting and Syntax Compliance
+Check line constraints and coding syntax styles prior to creating repository commits:
+```bash
+poetry run black .
+poetry run flake8 .
+```
+
+---
+
+## 5. Deployment Options (Docker Containerization)
+
+For self-contained container deployments, compile and run the engine using the localized production configuration layout:
+```bash
+docker build -t metadata-orchestrator .
+docker run --rm metadata-orchestrator
+```
