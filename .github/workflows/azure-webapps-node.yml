@@ -40,5 +40,4 @@ jobs:
       run: mypy . --ignore-missing-imports
 
     - name: Run tests with code coverage
-        - name: Run tests with code coverage
       run: pytest --cov=. --cov-report=term-missing --cov-fail-under=75
