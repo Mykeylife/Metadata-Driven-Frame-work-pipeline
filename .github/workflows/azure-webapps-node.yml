@@ -40,4 +40,4 @@ jobs:
       run: mypy . --ignore-missing-imports
 
     - name: Run tests with code coverage
-      run: pytest --cov=. --cov-report=term-missing --cov-fail-under=60 --omit="init_simulation_db.py,tests/*,test_*"
+      run: pytest --cov=. --cov-report=term-missing --cov-fail-under=60
