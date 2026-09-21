@@ -1,38 +1,36 @@
 import unittest
 import sqlite3
 from unittest.mock import patch
-
-# 1. MAKE SURE TO IMPORT YOUR ACTUAL ORCHESTRATOR CODE
-# Assuming your file is named orchestrator.py in the root or a folder:
-import orchestrator 
+# Importing the actual pipeline engine logic from your root orchestrator module
+import orchestrator
 
 class TestMetadataPipelineOrchestrator(unittest.TestCase):
 
     def setUp(self):
-        """Set up an in-memory SQLite database mimicking the real pipeline_metadata schema."""
+        """Set up an in-memory SQLite database mimicking the real pipeline schema."""
         self.connection = sqlite3.connect(":memory:")
         self.cursor = self.connection.cursor()
-        
-        # Create the pipeline_metadata tracking table
+
+        # 1. Create the pipeline_metadata tracking table
         self.cursor.execute("""
             CREATE TABLE IF NOT EXISTS pipeline_metadata (
                 run_id TEXT PRIMARY KEY,
-                pipeline_name TEXT,
-                status TEXT,
+                pipeline_name TEXT NOT NULL,
+                status TEXT CHECK(status IN ('PENDING', 'RUNNING', 'SUCCESS', 'FAILED')) DEFAULT 'PENDING',
                 started_at TEXT,
                 ended_at TEXT
             )
         """)
-        
-        # Create the execution log tracking table
+
+        # 2. Create the execution log tracking table
         self.cursor.execute("""
             CREATE TABLE IF NOT EXISTS execution_logs (
                 log_id INTEGER PRIMARY KEY AUTOINCREMENT,
-                run_id TEXT,
-                step_name TEXT,
-                log_level TEXT,
-                message TEXT,
-                timestamp TEXT,
+                run_id TEXT NOT NULL,
+                step_name TEXT CHECK(step_name IN ('VALIDATION', 'INITIALIZATION', 'EXECUTION', 'CLEANUP')) NOT NULL,
+                log_level TEXT CHECK(log_level IN ('DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL')) DEFAULT 'INFO',
+                message TEXT NOT NULL,
+                timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY(run_id) REFERENCES pipeline_metadata(run_id)
             )
         """)
@@ -42,30 +40,36 @@ class TestMetadataPipelineOrchestrator(unittest.TestCase):
         """Clean up the test environment database."""
         self.connection.close()
 
-    @patch('sqlite3.connect')
-    def test_orchestrator_execution_flow(self, mock_connect):
+    @patch("sqlite3.connect")
+    def test_orchestrator_execution(self, mock_connect):
         """Test that the orchestrator reads metadata and writes logs correctly."""
-        # Force the connection to use our in-memory database
+        # Force the orchestrator connection parameters to use our active in-memory database
         mock_connect.return_value = self.connection
-        
-        # Insert a test row
-        self.cursor.execute(
-            "INSERT INTO pipeline_metadata (run_id, pipeline_name, status) VALUES (?, ?, ?)",
-            ("run_test_001", "Metadata-Driven-Pipeline", "PENDING")
-        )
+
+        # 1. Insert an initial test row with PENDING state
+        self.cursor.execute("""
+            INSERT INTO pipeline_metadata (run_id, pipeline_name, status)
+            VALUES ('run_test_001', 'Metadata-Driven-Pipeline', 'PENDING')
+        """)
         self.connection.commit()
 
-        # 2. ACTIVELY RUN YOUR ORCHESTRATOR CODE (Uncommented)
-        # Adjust this function name to match whatever execution function is inside your orchestrator.py
+        # 2. Actively run your orchestrator logic using the in-memory database connection
         status = orchestrator.run_pipeline("run_test_001", db_conn=self.connection)
+        
+        # Verify the pipeline engine successfully updates and completes as SUCCESS
         self.assertEqual(status, "SUCCESS")
 
-        # 3. ACTIVELY VERIFY LOG VALUES (Uncommented)
-        self.cursor.execute("SELECT step_name, log_level FROM execution_logs WHERE run_id = ?", ("run_test_001",))
+        # 3. Actively verify log values are populated to your logging metrics tables
+        self.cursor.execute("SELECT step_name, log_level FROM execution_logs WHERE run_id = 'run_test_001'")
         logs_written = self.cursor.fetchall()
-        
-        # Assert that your logic populated rows to your logging metrics
-        self.assertTrue(len(logs_written) > 0)
 
-if __name__ == '__main__':
+        # Assert that your logic populated multiple detailed logging footprint rows
+        self.assertTrue(len(logs_written) >= 3)
+        
+        # Verify that the initialization and cleanup steps were tracked explicitly
+        steps = [log[0] for log in logs_written]
+        self.assertIn("INITIALIZATION", steps)
+        self.assertIn("CLEANUP", steps)
+
+if __name__ == "__main__":
     unittest.main()
