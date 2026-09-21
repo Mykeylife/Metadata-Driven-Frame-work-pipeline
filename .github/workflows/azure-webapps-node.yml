@@ -29,15 +29,15 @@ jobs:
           pip install pytest pytest-cov black flake8 mypy pydantic
           pip freeze > requirements-lock.txt
         fi
+
     - name: Auto-format with Black
-      run: black adf-src/ || true
+      run: black .
 
-    - name: Lint with flake8 (Non-blocking)
-      run: flake8 adf-src/ || true
+    - name: Lint with Flake8
+      run: flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
 
-    - name: Static type check with Mypy (Non-blocking)
-      run: mypy adf-src/ || true
+    - name: Static type check with Mypy
+      run: mypy . --ignore-missing-imports
 
     - name: Run tests with code coverage
-      run: |
-        pytest --cov=adf-src/ --cov-report=term-missing --cov-fail-under=10 || true
+      run: pytest --cov=. --cov-report=term-missing --cov-fail-under=80
