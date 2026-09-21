@@ -32,14 +32,19 @@ ignore = []
 [tool.coverage.run]
 source = ["backend"]
 branch = true
+omit = [
+    "init_simulation_db.py",
+    "tests/*",
+    "test_*"
+]
 
 [tool.coverage.report]
-# Tightens the gate: Forces code scoring engines to demand high code-coverage
+# Tighten the gate: Forces code scoring engines to demand high code-coverage
 fail_under = 80
 show_missing = true
 exclude_lines = [
     "pragma: no cover",
     "def __repr__",
-    "if __name__ == '__main__':",
+    "if __name__ == .__main__.:",
     "raise NotImplementedError"
 ]
