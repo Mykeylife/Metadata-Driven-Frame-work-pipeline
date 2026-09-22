@@ -1,0 +1,6 @@
+[run]
+omit =
+    init_simulation_db.py
+    task_manager.py
+    tests/*
+    test_*
