@@ -19,11 +19,15 @@ jobs:
     - name: Set up Python 3.11
       uses: actions/setup-python@v5
       with:
-        python-version: '3.11'   
+        python-version: '3.11'    
         
         - name: Install Poetry
-      run: pipx install poetry
-      
+      uses: snok/install-poetry@v1
+      with:
+        version: 1.8.3
+        virtualenvs-create: true
+        virtualenvs-in-project: true
+        
     # Self-Healing Step: Generates the lockfile automatically on the server
     - name: Generate and Commit Poetry Lockfile
       run: |
