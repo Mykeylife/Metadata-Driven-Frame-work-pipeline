@@ -24,13 +24,6 @@ jobs:
     - name: Install Poetry
       run: pipx install poetry
 
-    # Self-Healing Step: Generates the lockfile automatically on the server
-    - name: Generate and Commit Poetry Lockfile
-    
-
-      
-    # Self-Healing Step: Generates the lockfile automatically on the server
-    - name: Generate and Commit Poetry Lockfile
       run: |
         poetry lock --no-update
         if [ -n "$(git status --porcelain poetry.lock)" ]; then
