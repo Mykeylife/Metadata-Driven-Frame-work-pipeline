@@ -60,3 +60,9 @@ class PipelineOrchestrator:
         
         if not row:
             raise PipelineExecutionError(f"Validation failed: No execution log entry found for run_id {run_id}")
+# Add this to the very bottom of orchestrator.py
+
+def run_pipeline(run_id: str, pipeline_name: str, db_path: str = "simulation.db"):
+    """Module-level function to maintain compatibility with existing tests."""
+    orchestrator = PipelineOrchestrator(db_path=db_path)
+    return orchestrator.run_pipeline(run_id, pipeline_name)
