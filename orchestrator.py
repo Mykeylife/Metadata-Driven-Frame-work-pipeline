@@ -1,109 +1,62 @@
-import os
+# orchestrator.py
 import sqlite3
-import logging
 from datetime import datetime
+from models import PipelineRun, PipelineExecutionError
 
-# Configure structured system logging
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(message)s",
-    handlers=[logging.StreamHandler()]
-)
+class PipelineOrchestrator:
+    def __init__(self, db_path: str = "simulation.db"):
+        self.db_path = db_path
 
-def validate_pipeline_target(pipeline_name: str) -> bool:
-    """Validates that the requested pipeline name meets structural criteria."""
-    if not pipeline_name or len(pipeline_name.strip()) < 3:
-        logging.error(f"Validation failed: Invalid pipeline name structure: {pipeline_name}")
-        return False
-    return True
-
-def log_execution_step(cursor, run_id: str, step_name: str, log_level: str, message: str):
-    """Writes detailed engineering tracking footprints directly into execution_logs."""
-    try:
-        cursor.execute('''
-            INSERT INTO execution_logs (run_id, step_name, log_level, message)
-            VALUES (?, ?, ?, ?)
-        ''', (run_id, step_name, log_level, message))
-    except sqlite3.Error as db_error:
-        logging.error(f"Failed to write footprint to execution_logs: {db_error}")
-
-def run_pipeline(run_id: str, db_conn=None) -> str:
-    """
-    Orchestrates a metadata-driven pipeline run lifecycle.
-    Fetches pending tracks, runs execution iterations with retries, and audits state.
-    """
-    if not run_id:
-        return "FAILED"
-        
-    # Use existing test connection or initialize a standard persistent db
-    conn = db_conn if db_conn else sqlite3.connect("metadata_store.db")
-    cursor = conn.cursor()
-    
-    try:
-        # 1. Fetch current runtime metadata state
-        cursor.execute(
-            "SELECT pipeline_name, status FROM pipeline_metadata WHERE run_id = ?",
-            (run_id,)
+    def run_pipeline(self, run_id: str, pipeline_name: str) -> PipelineRun:
+        # Construct and validate initial tracking schema instance
+        current_run = PipelineRun(
+            run_id=run_id,
+            pipeline_name=pipeline_name,
+            status="RUNNING",
+            started_at=datetime.utcnow()
         )
+        
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            
+            # Simple metadata guard check
+            cursor.execute("SELECT is_active FROM pipeline_metadata WHERE pipeline_name = ?", (pipeline_name,))
+            row = cursor.fetchone()
+            if not row or not row[0]:
+                raise PipelineExecutionError(f"Pipeline '{pipeline_name}' is inactive or missing metadata.")
+            
+            # Perform pipeline task execution registration tracking...
+            cursor.execute("""
+                INSERT INTO execution_logs (run_id, pipeline_name, status, started_at, ended_at)
+                VALUES (?, ?, ?, ?, ?)
+            """, (current_run.run_id, current_run.pipeline_name, current_run.status, current_run.started_at.isoformat(), None))
+            
+            conn.commit()
+            
+            # Update instance status upon clean termination
+            current_run.status = "SUCCESS"
+            current_run.ended_at = datetime.utcnow()
+            
+            cursor.execute("UPDATE execution_logs SET status = ?, ended_at = ? WHERE run_id = ?", 
+                           (current_run.status, current_run.ended_at.isoformat(), current_run.run_id))
+            conn.commit()
+            return current_run
+            
+        except sqlite3.Error as e:
+            # Drop broad string sentinel 'FAILED' returns; raise explicit typed exception instead
+            raise PipelineExecutionError(f"Database transaction failure during pipeline execution: {str(e)}") from e
+        finally:
+            if 'conn' in locals():
+                conn.close()
+
+    def validate_execution_logs(self, run_id: str) -> None:
+        """Checks target row counts and essential metrics post-execution."""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        cursor.execute("SELECT run_id, status FROM execution_logs WHERE run_id = ?", (run_id,))
         row = cursor.fetchone()
+        conn.close()
         
         if not row:
-            logging.error(f"Execution aborted: run_id ('{run_id}') not found.")
-            return "FAILED"
-            
-        pipeline_name, status = row[0], row[1]
-        
-        if not validate_pipeline_target(pipeline_name):
-            log_execution_step(cursor, run_id, "VALIDATION", "CRITICAL", "Validation failed.")
-            return "FAILED"
-            
-        # 2. Update status to RUNNING and log startup sequence
-        start_time = datetime.utcnow().isoformat()
-        cursor.execute(
-            "UPDATE pipeline_metadata SET status = 'RUNNING', started_at = ? WHERE run_id = ?",
-            (start_time, run_id)
-        )
-        conn.commit()
-        log_execution_step(cursor, run_id, "INITIALIZATION", "INFO", "Simulation pipeline run initiated.")
-        
-        # 3. Simulated Execution Loop with Automated Error Recovery Retries
-        max_retries = 3
-        execution_success = False
-        
-        for attempt in range(1, max_retries + 1):
-            log_execution_step(cursor, run_id, "EXECUTION", "DEBUG", f"Running execution loop attempt {attempt}")
-            
-            # Placeholder representing standard operational tasks
-            if attempt < 2:  # Simulate a temporary network or locking hurdle
-                log_execution_step(cursor, run_id, "EXECUTION", "WARNING", "Temporary resource hurdle encountered.")
-                continue
-                
-            execution_success = True
-            break
-            
-        # 4. Finalize state based on execution iteration outcomes
-        end_time = datetime.utcnow().isoformat()
-        if execution_success:
-            cursor.execute(
-                "UPDATE pipeline_metadata SET status = 'SUCCESS', ended_at = ? WHERE run_id = ?",
-                (end_time, run_id)
-            )
-            log_execution_step(cursor, run_id, "CLEANUP", "INFO", "Pipeline final status: SUCCESS")
-            final_status = "SUCCESS"
-        else:
-            cursor.execute(
-                "UPDATE pipeline_metadata SET status = 'FAILED', ended_at = ? WHERE run_id = ?",
-                (end_time, run_id)
-            )
-            log_execution_step(cursor, run_id, "CLEANUP", "ERROR", "Pipeline final status: FAILED")
-            final_status = "FAILED"
-            
-        conn.commit()
-        return final_status
-        
-    except sqlite3.Error as error:
-        logging.critical(f"Orchestration engine runtime crash: {error}")
-        return "FAILED"
-    finally:
-        if not db_conn:
-            conn.close()
+            raise PipelineExecutionError(f"Validation failed: No execution log entry found for run_id {run_id}")
