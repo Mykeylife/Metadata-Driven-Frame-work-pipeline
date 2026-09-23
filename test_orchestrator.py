@@ -1,75 +1,66 @@
+# test_orchestrator.py
 import unittest
 import sqlite3
-from unittest.mock import patch
-# Importing the actual pipeline engine logic from your root orchestrator module
-import orchestrator
+from datetime import datetime
+from orchestrator import PipelineOrchestrator, run_pipeline
+from models import PipelineRun, PipelineExecutionError
 
 class TestMetadataPipelineOrchestrator(unittest.TestCase):
-
     def setUp(self):
-        """Set up an in-memory SQLite database mimicking the real pipeline schema."""
+        # Create an clean in-memory database configuration for isolated test runs
         self.connection = sqlite3.connect(":memory:")
-        self.cursor = self.connection.cursor()
-
-        # 1. Create the pipeline_metadata tracking table
-        self.cursor.execute("""
-            CREATE TABLE IF NOT EXISTS pipeline_metadata (
-                run_id TEXT PRIMARY KEY,
-                pipeline_name TEXT NOT NULL,
-                status TEXT CHECK(status IN ('PENDING', 'RUNNING', 'SUCCESS', 'FAILED')) DEFAULT 'PENDING',
-                started_at TEXT,
-                ended_at TEXT
+        self.orchestrator = PipelineOrchestrator(db_conn=self.connection)
+        
+        # Explicitly build the modern table structures required by the model validations
+        cursor = self.connection.cursor()
+        cursor.execute("""
+            CREATE TABLE pipeline_metadata (
+                pipeline_name TEXT PRIMARY KEY,
+                is_active INTEGER DEFAULT 1
             )
         """)
-
-        # 2. Create the execution log tracking table
-        self.cursor.execute("""
-            CREATE TABLE IF NOT EXISTS execution_logs (
-                log_id INTEGER PRIMARY KEY AUTOINCREMENT,
-                run_id TEXT NOT NULL,
-                step_name TEXT CHECK(step_name IN ('VALIDATION', 'INITIALIZATION', 'EXECUTION', 'CLEANUP')) NOT NULL,
-                log_level TEXT CHECK(log_level IN ('DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL')) DEFAULT 'INFO',
-                message TEXT NOT NULL,
-                timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY(run_id) REFERENCES pipeline_metadata(run_id)
+        cursor.execute("""
+            CREATE TABLE execution_logs (
+                run_id TEXT PRIMARY KEY,
+                pipeline_name TEXT NOT NULL,
+                status TEXT NOT NULL,
+                started_at TEXT NOT NULL,
+                ended_at TEXT
             )
         """)
         self.connection.commit()
 
     def tearDown(self):
-        """Clean up the test environment database."""
         self.connection.close()
 
-    @patch("sqlite3.connect")
-    def test_orchestrator_execution(self, mock_connect):
-        """Test that the orchestrator reads metadata and writes logs correctly."""
-        # Force the orchestrator connection parameters to use our active in-memory database
-        mock_connect.return_value = self.connection
-
-        # 1. Insert an initial test row with PENDING state
-        self.cursor.execute("""
-            INSERT INTO pipeline_metadata (run_id, pipeline_name, status)
-            VALUES ('run_test_001', 'Metadata-Driven-Pipeline', 'PENDING')
-        """)
+    def test_orchestrator_execution(self):
+        # Seed the metadata table correctly
+        cursor = self.connection.cursor()
+        cursor.execute("INSERT INTO pipeline_metadata (pipeline_name, is_active) VALUES (?, 1)", 
+                       ("Metadata-Driven-Pipeline",))
         self.connection.commit()
 
-        # 2. Actively run your orchestrator logic using the in-memory database connection
-        status = orchestrator.run_pipeline("run_test_001", db_conn=self.connection)
+        # Run the pipeline test
+        result = self.orchestrator.run_pipeline("run_test_001", "Metadata-Driven-Pipeline")
         
-        # Verify the pipeline engine successfully updates and completes as SUCCESS
-        self.assertEqual(status, "SUCCESS")
-
-        # 3. Actively verify log values are populated to your logging metrics tables
-        self.cursor.execute("SELECT step_name, log_level FROM execution_logs WHERE run_id = 'run_test_001'")
-        logs_written = self.cursor.fetchall()
-
-        # Assert that your logic populated multiple detailed logging footprint rows
-        self.assertTrue(len(logs_written) >= 3)
+        # Verify both data structures are accurately populated
+        self.assertIsInstance(result, PipelineRun)
+        self.assertEqual(result.status, "SUCCESS")
+        self.assertEqual(result.run_id, "run_test_001")
         
-        # Verify that the initialization and cleanup steps were tracked explicitly
-        steps = [log[0] for log in logs_written]
-        self.assertIn("INITIALIZATION", steps)
-        self.assertIn("CLEANUP", steps)
+        # Assert database state validation logic passes properly
+        self.orchestrator.validate_execution_logs("run_test_001")
+
+    def test_inactive_pipeline_throws_error(self):
+        # Seed an explicitly disabled pipeline tracking configuration rule
+        cursor = self.connection.cursor()
+        cursor.execute("INSERT INTO pipeline_metadata (pipeline_name, is_active) VALUES (?, 0)", 
+                       ("Disabled-Pipeline",))
+        self.connection.commit()
+
+        # Assert that our custom typed validation exception triggers correctly
+        with self.assertRaises(PipelineExecutionError):
+            self.orchestrator.run_pipeline("run_test_002", "Disabled-Pipeline")
 
 if __name__ == "__main__":
     unittest.main()
