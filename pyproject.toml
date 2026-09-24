@@ -27,3 +27,8 @@ line-length = 88
 target-version = "py311"
 select = ["E", "F", "W", "I", "N", "UP", "B", "C4"]
 ignore = []
+
+# --- Add this section to resolve the ModuleNotFoundError ---
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests", "pipeline/tests"]
