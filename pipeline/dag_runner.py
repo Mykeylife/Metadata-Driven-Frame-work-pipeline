@@ -1,7 +1,7 @@
 import sqlite3
 import uuid
 from datetime import datetime
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 import logging
 
 # Set up logger - this will integrate with your future structured JSON setup
@@ -39,7 +39,7 @@ class DAGRunner:
             logger.error(f"Database schema missing or misconfigured. Ensure initialization scripts ran: {e}")
             raise
 
-    def log_execution(self, run_id: str, step_name: str, status: str, error_message: str = None):
+    def log_execution(self, run_id: str, step_name: str, status: str, error_message: Optional[str] = None):
         """
         Writes execution logs directly to `pipeline_execution_logs` to maintain an audit trail.
         """
