@@ -1,6 +1,12 @@
+import os
+import sys
 import sqlite3
 import pytest
 from unittest.mock import MagicMock
+
+# Force Python to find the root package folder regardless of local tool configurations
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+
 from pipeline.dag_runner import DAGRunner
 
 @pytest.fixture
