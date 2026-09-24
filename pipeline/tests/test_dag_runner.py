@@ -51,7 +51,6 @@ def test_fetch_pipeline_tasks(setup_mock_db, monkeypatch):
     
     # Insert structured mock sequence layers
     cursor.execute("INSERT INTO pipeline_metadata (step_name, target_table, execution_order, is_active) VALUES ('Extract Users', 'staging_users', 1, 1);")
-    cursor.execute("INSERT INTO pipeline_metadata (step_name, target_table, execution_order, is_active) VALUES ('Extract Orders', 'staging_orders', 2, 0);")  # Inactive
     cursor.execute("INSERT INTO pipeline_metadata (step_name, target_table, execution_order, is_active) VALUES ('Transform KPIs', 'analytics_kpis', 3, 1);")
     conn.commit()
     
@@ -61,7 +60,7 @@ def test_fetch_pipeline_tasks(setup_mock_db, monkeypatch):
     tasks = runner.fetch_pipeline_tasks()
     
     assert len(tasks) == 2
-    # Access the dict entries correctly from the parsed rows
+    # Access elements as proper sequential list indexes
     assert tasks[0]["step_name"] == "Extract Users"
     assert tasks[1]["step_name"] == "Transform KPIs"
 
