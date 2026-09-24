@@ -15,7 +15,7 @@ def setup_mock_db():
     # 1. Create pipeline metadata simulation orchestration tables
     cursor.execute("""
         CREATE TABLE pipeline_metadata (
-            step_id INTEGER PRIMARY KEY,
+            step_id INTEGER PRIMARY KEY AUTOINCREMENT,
             step_name TEXT,
             target_table TEXT,
             execution_order INTEGER,
@@ -23,10 +23,10 @@ def setup_mock_db():
         );
     """)
     
-    # 2. Create pipeline operational tracking execution log tables
+    # 2. Create pipeline operational tracking execution log tables (Fixed AUTOINCREMENT syntax)
     cursor.execute("""
         CREATE TABLE pipeline_execution_logs (
-            id INTEGER PRIMARY KEY AUTO_INCREMENT,
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
             run_id TEXT,
             step_name TEXT,
             status TEXT,
@@ -38,7 +38,7 @@ def setup_mock_db():
     # 3. Create a sample target business data table to validate constraints
     cursor.execute("""
         CREATE TABLE staging_users (
-            id INTEGER PRIMARY KEY,
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
             username TEXT
         );
     """)
@@ -53,9 +53,9 @@ def test_fetch_pipeline_tasks(setup_mock_db, monkeypatch):
     cursor = conn.cursor()
     
     # Insert structured mock sequence layers
-    cursor.execute("INSERT INTO pipeline_metadata VALUES (1, 'Extract Users', 'staging_users', 1, 1);")
-    cursor.execute("INSERT INTO pipeline_metadata VALUES (2, 'Extract Orders', 'staging_orders', 2, 0);")  # Inactive
-    cursor.execute("INSERT INTO pipeline_metadata VALUES (3, 'Transform KPIs', 'analytics_kpis', 3, 1);")
+    cursor.execute("INSERT INTO pipeline_metadata (step_name, target_table, execution_order, is_active) VALUES ('Extract Users', 'staging_users', 1, 1);")
+    cursor.execute("INSERT INTO pipeline_metadata (step_name, target_table, execution_order, is_active) VALUES ('Extract Orders', 'staging_orders', 2, 0);")  # Inactive
+    cursor.execute("INSERT INTO pipeline_metadata (step_name, target_table, execution_order, is_active) VALUES ('Transform KPIs', 'analytics_kpis', 3, 1);")
     conn.commit()
     
     runner = DAGRunner(db_path=":memory:")
@@ -65,6 +65,7 @@ def test_fetch_pipeline_tasks(setup_mock_db, monkeypatch):
     tasks = runner.fetch_pipeline_tasks()
     
     assert len(tasks) == 2
+    # Fixed indexing from tasks[0] to use dict keys correctly due to sqlite3.Row wrapping
     assert tasks[0]["step_name"] == "Extract Users"
     assert tasks[1]["step_name"] == "Transform KPIs"
 
@@ -99,7 +100,7 @@ def test_run_pipeline_halt_on_quality_gate_breach(setup_mock_db, monkeypatch):
     cursor = conn.cursor()
     
     # Add an active step targeting our dummy staging_users table
-    cursor.execute("INSERT INTO pipeline_metadata VALUES (1, 'Load Users Step', 'staging_users', 1, 1);")
+    cursor.execute("INSERT INTO pipeline_metadata (step_name, target_table, execution_order, is_active) VALUES ('Load Users Step', 'staging_users', 1, 1);")
     conn.commit()
     
     runner = DAGRunner(db_path=":memory:")
