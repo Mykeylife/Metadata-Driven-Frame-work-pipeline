@@ -5,10 +5,7 @@ from pipeline.dag_runner import DAGRunner
 
 @pytest.fixture
 def setup_mock_db():
-    """
-    Creates an ephemeral, in-memory SQLite database pre-populated 
-    with schemas required to mirror the runtime orchestration state.
-    """
+    """Creates an ephemeral, in-memory SQLite database for testing."""
     conn = sqlite3.connect(":memory:")
     cursor = conn.cursor()
     
@@ -23,7 +20,7 @@ def setup_mock_db():
         );
     """)
     
-    # 2. Create pipeline operational tracking execution log tables (Fixed AUTOINCREMENT syntax)
+    # 2. Create pipeline operational tracking execution log tables
     cursor.execute("""
         CREATE TABLE pipeline_execution_logs (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -59,13 +56,12 @@ def test_fetch_pipeline_tasks(setup_mock_db, monkeypatch):
     conn.commit()
     
     runner = DAGRunner(db_path=":memory:")
-    # Patch the direct inner helper method to use our active shared memory pointer
     monkeypatch.setattr(runner, "_get_db_connection", lambda: conn)
     
     tasks = runner.fetch_pipeline_tasks()
     
     assert len(tasks) == 2
-    # Fixed indexing from tasks[0] to use dict keys correctly due to sqlite3.Row wrapping
+    # Access the dict entries correctly from the parsed rows
     assert tasks[0]["step_name"] == "Extract Users"
     assert tasks[1]["step_name"] == "Transform KPIs"
 
@@ -92,10 +88,7 @@ def test_log_execution_trail(setup_mock_db, monkeypatch):
     assert log_row[3] == "Simulated connection exception drop."
 
 def test_run_pipeline_halt_on_quality_gate_breach(setup_mock_db, monkeypatch):
-    """
-    Validates that the orchestrator actively halts operational execution 
-    if a target data-quality metric returns an invalid layout configuration.
-    """
+    """Validates that the orchestrator actively halts operational execution upon quality breaches."""
     conn = setup_mock_db
     cursor = conn.cursor()
     
@@ -106,13 +99,11 @@ def test_run_pipeline_halt_on_quality_gate_breach(setup_mock_db, monkeypatch):
     runner = DAGRunner(db_path=":memory:")
     monkeypatch.setattr(runner, "_get_db_connection", lambda: conn)
     
-    # Force task logic success, but leave 'staging_users' table completely empty
-    # This will deliberately trip the validator's check_row_count check (requires >= 1 row)
+    # Force task logic success, but leave 'staging_users' table completely empty to trip row count check
     runner.execute_task_logic = MagicMock(return_value=True)
     
     runner.run_pipeline()
     
-    # Query execution log states to confirm a FAILED gate status caught the issue
     cursor.execute("SELECT status, error_message FROM pipeline_execution_logs WHERE step_name = 'Load Users Step' AND status = 'FAILED';")
     failure_log = cursor.fetchone()
     
