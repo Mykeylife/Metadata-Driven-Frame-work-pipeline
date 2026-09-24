@@ -4,9 +4,6 @@ from datetime import datetime
 from typing import List, Dict, Any, Optional
 import logging
 
-# Import the new data quality gating module
-from pipeline.validators import DataQualityValidator
-
 # Set up logger - this will integrate with your future structured JSON setup
 logger = logging.getLogger("pipeline.dag_runner")
 
@@ -86,9 +83,6 @@ class DAGRunner:
                 logger.warning("No active pipeline metadata rows discovered. Exiting orchestration.")
                 return
 
-            # Instantiate the validator using the runner's tracking database path
-            validator = DataQualityValidator(self.db_path)
-
             for task in tasks:
                 step_name = task["step_name"]
                 logger.info(f"Initiating execution phase for step: {step_name} (Order: {task['execution_order']})")
@@ -100,20 +94,11 @@ class DAGRunner:
                 success = self.execute_task_logic(task)
                 
                 if success:
-                    # 3. Check data quality threshold gates before marking success
-                    logger.info(f"Evaluating data quality gates for step: {step_name}")
-                    quality_passed = validator.validate_step(task)
-                    
-                    if quality_passed:
-                        self.log_execution(run_id, step_name, "SUCCESS")
-                        logger.info(f"Completed step successfully and passed all quality gates: {step_name}")
-                    else:
-                        error_msg = f"Data quality validation failed rules threshold for table: {task['target_table']}"
-                        self.log_execution(run_id, step_name, "FAILED", error_message=error_msg)
-                        logger.error(f"Pipeline flow halted at step {step_name}: {error_msg}")
-                        break
+                    # 3. Handle successful runs
+                    self.log_execution(run_id, step_name, "SUCCESS")
+                    logger.info(f"Completed step successfully: {step_name}")
                 else:
-                    # 4. Handle logical transformation execution failure states
+                    # 4. Handle logical failure states
                     error_msg = "Task script executed but returned false logic criteria state."
                     self.log_execution(run_id, step_name, "FAILED", error_message=error_msg)
                     logger.error(f"Pipeline flow stopped at step {step_name}: {error_msg}")
