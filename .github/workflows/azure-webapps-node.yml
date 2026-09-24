@@ -2,37 +2,25 @@ name: CI/CD Pipeline
 
 on:
   push:
-    branches: [ main ]
+    branches: [ "main" ]
   pull_request:
-    branches: [ main ]
+    branches: [ "main" ]
 
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write  # Crucial: Gives GitHub Actions permission to commit the lockfile back to your repo
 
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
 
-        - name: Set up Python 3.11
+    - name: Set up Python 3.11
       uses: actions/setup-python@v5
       with:
         python-version: '3.11'
 
     - name: Install Poetry
       run: pipx install poetry
-
-      run: |
-        poetry lock --no-update
-        if [ -n "$(git status --porcelain poetry.lock)" ]; then
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@://github.com"
-          git add poetry.lock
-          git commit -m "chore: auto-generate poetry.lock via CI workflow"
-          git push
-        fi
 
     - name: Install dependencies
       run: poetry install --no-root
