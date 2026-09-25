@@ -68,7 +68,7 @@ def test_fetch_pipeline_tasks(setup_mock_db, monkeypatch):
     tasks = runner.fetch_pipeline_tasks()
     
     assert len(tasks) == 2
-    # Fixed: Access the list elements by their numerical position index first
+    # Access the list elements by their numerical position index first
     assert tasks[0]["step_name"] == "Extract Users"
     assert tasks[1]["step_name"] == "Transform KPIs"
 
