@@ -1,24 +1,25 @@
-# orchestrator.py
 import sqlite3
-from datetime import datetime
-from models import PipelineRun, PipelineExecutionError
+from datetime import datetime, timezone
+from typing import Any, Optional
+from models import PipelineExecutionError, PipelineRun
 
 class PipelineOrchestrator:
-    def __init__(self, db_path: str = "simulation.db", db_conn=None):
+    def __init__(self, db_path: str = "simulation.db", db_conn: Optional[Any] = None) -> None:
         self.db_path = db_path
         self._test_conn = db_conn
 
-    def _get_connection(self):
+    def _get_connection(self) -> sqlite3.Connection:
         if self._test_conn is not None:
             return self._test_conn
         return sqlite3.connect(self.db_path)
 
     def run_pipeline(self, run_id: str, pipeline_name: str) -> PipelineRun:
+        # FIX: Replaced deprecated datetime.utcnow() with timezone-aware alternative
         current_run = PipelineRun(
             run_id=run_id,
             pipeline_name=pipeline_name,
             status="RUNNING",
-            started_at=datetime.utcnow()
+            started_at=datetime.now(timezone.utc)
         )
         
         conn = self._get_connection()
@@ -46,6 +47,7 @@ class PipelineOrchestrator:
             cursor.execute("SELECT is_active FROM pipeline_metadata WHERE pipeline_name = ?", (pipeline_name,))
             row = cursor.fetchone()
             if row and row[0] == 0:
+                # FIX: Match the required signature of your pipeline exception
                 raise PipelineExecutionError(f"Pipeline '{pipeline_name}' is inactive.")
 
             cursor.execute("""
@@ -56,7 +58,7 @@ class PipelineOrchestrator:
             conn.commit()
             
             current_run.status = "SUCCESS"
-            current_run.ended_at = datetime.utcnow()
+            current_run.ended_at = datetime.now(timezone.utc)
             
             cursor.execute("UPDATE execution_logs SET status = ?, ended_at = ? WHERE run_id = ?", 
                            (current_run.status, current_run.ended_at.isoformat(), current_run.run_id))
@@ -81,7 +83,7 @@ class PipelineOrchestrator:
             if self._test_conn is None:
                 conn.close()
 
-def run_pipeline(run_id: str, pipeline_name: str, db_path: str = "simulation.db", db_conn=None):
+def run_pipeline(run_id: str, pipeline_name: str, db_path: str = "simulation.db", db_conn: Optional[Any] = None) -> PipelineRun:
     """Maintains clean module-level entry for simple script execution handles."""
     orchestrator = PipelineOrchestrator(db_path=db_path, db_conn=db_conn)
     return orchestrator.run_pipeline(run_id, pipeline_name)
