@@ -4,7 +4,7 @@ import sqlite3
 import pytest
 from unittest.mock import MagicMock
 
-# Force the working environment to recognize the root folder path cleanly
+# Force the execution environment to recognize the root package folder cleanly
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from pipeline.dag_runner import DAGRunner
@@ -68,7 +68,7 @@ def test_fetch_pipeline_tasks(setup_mock_db, monkeypatch):
     tasks = runner.fetch_pipeline_tasks()
     
     assert len(tasks) == 2
-    # Corrected: Access list of Row elements using explicitly mapped string keys
+    # Fixed: Access the list elements by their numerical position index first
     assert tasks[0]["step_name"] == "Extract Users"
     assert tasks[1]["step_name"] == "Transform KPIs"
 
@@ -90,7 +90,7 @@ def test_log_execution_trail(setup_mock_db, monkeypatch):
     log_row = cursor.fetchone()
     
     assert log_row is not None
-    # Corrected: Use explicit string column lookups instead of integer indices
+    # Access using explicit string keys mapped from the row object columns
     assert log_row["run_id"] == "test-uuid-1234"
     assert log_row["status"] == "FAILED"
     assert log_row["error_message"] == "Simulated connection exception drop."
@@ -116,5 +116,5 @@ def test_run_pipeline_halt_on_quality_gate_breach(setup_mock_db, monkeypatch):
     failure_log = cursor.fetchone()
     
     assert failure_log is not None
-    # Corrected: Safe string-key lookups matching the row object definitions
+    # Safe string-key lookups matching row object definitions
     assert "Data quality validation failed" in failure_log["error_message"]
