@@ -1,9 +1,17 @@
 [tool.poetry]
 name = "metadata-driven-frame-work-pipeline"
-package-mode = false   # <--- Add this exact line here
+package-mode = false
 version = "0.1.0"
 description = "A metadata-driven pipeline orchestrator with SQLite backing"
 authors = ["Olanrewaju Micheal Akinbode <mykeylife6@gmail.com>"]
+
+[tool.poetry.dependencies]
+python = "^3.11"
+
+[tool.poetry.group.dev.dependencies]
+mypy = "^1.11.0"
+pytest = "^8.0.0"
+pytest-cov = "^5.0.0"
 
 [tool.black]
 line-length = 88
@@ -29,7 +37,6 @@ target-version = "py311"
 select = ["E", "F", "W", "I", "N", "UP", "B", "C4"]
 ignore = []
 
-# --- Add this section to resolve the ModuleNotFoundError ---
 [tool.pytest.ini_options]
 pythonpath = ["."]
 testpaths = ["tests", "pipeline/tests"]
