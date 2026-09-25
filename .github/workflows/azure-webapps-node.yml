@@ -23,9 +23,9 @@ jobs:
       run: pipx install poetry
 
     - name: Regenerate Lock File and Install Dependencies
-      # Fix: Running 'poetry lock' updates the hashes before 'poetry install' runs
+      # Fix: Removed the non-existent --no-update flag so it locks normally
       run: |
-        poetry lock --no-update
+        poetry lock
         poetry install
 
     - name: Static type check with Mypy
