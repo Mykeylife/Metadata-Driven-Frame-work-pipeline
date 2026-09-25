@@ -19,8 +19,11 @@ jobs:
       with:
         python-version: '3.11'
 
-    - name: Install Poetry
-      run: pipx install poetry
+    - name: Install dependencies
+      run: |
+        pip install poetry
+        poetry config virtualenvs.create false
+        poetry install --no-root --no-interaction
 
     - name: Regenerate Lock File and Install Dependencies
       # Fix: Removed the non-existent --no-update flag so it locks normally
