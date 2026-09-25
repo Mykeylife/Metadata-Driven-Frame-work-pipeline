@@ -22,14 +22,14 @@ jobs:
     - name: Install Poetry
       run: pipx install poetry
 
-    - name: Install dependencies
-      # Changed: Explicitly install the root workspace app structure properly
-      run: poetry install
+    - name: Regenerate Lock File and Install Dependencies
+      # Fix: Running 'poetry lock' updates the hashes before 'poetry install' runs
+      run: |
+        poetry lock --no-update
+        poetry install
 
     - name: Static type check with Mypy
-      # Fixed: Running via poetry run prevents namespace compilation drift
       run: poetry run mypy --explicit-package-bases pipeline tests
 
     - name: Run tests with code coverage
-      # Fixed: Prefixing python path inside poetry ensures zero module import drops
       run: poetry run env PYTHONPATH=. pytest --cov=pipeline --cov-report=term-missing --cov-fail-under=40
