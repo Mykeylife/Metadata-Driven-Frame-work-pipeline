@@ -1,7 +1,8 @@
 # pragma: no cover
+import logging
 import sqlite3
 import uuid
-import logging
+from typing import List
 
 class TaskCapacityManager:
     """Manages structural data pipeline work units to maximize capacity processing logs."""
@@ -16,10 +17,12 @@ class TaskCapacityManager:
             conn = sqlite3.connect(self.db_path)
             cursor = conn.cursor()
             
-            # Ensure the capacity logging step writes straight into execution_logs
+            # Formulate the track record message
             message = f"Capacity Tracked - Task: {task_id} | Payload size: {payload_size} rows processed."
+            
+            # FIX: Match the active pipeline execution log table and column definitions
             cursor.execute('''
-                INSERT INTO execution_logs (run_id, step_name, log_level, message)
+                INSERT INTO pipeline_execution_logs (run_id, step_name, status, error_message)
                 VALUES (?, ?, 'INFO', ?)
             ''', (run_id, step_name, message))
             
@@ -31,7 +34,7 @@ class TaskCapacityManager:
             logging.error(f"Task capacity registration error: {error}")
             return "FAILED"
 
-    def process_task_batch(self, run_id: str, tasks: list) -> int:
+    def process_task_batch(self, run_id: str, tasks: List[int]) -> int:
         """Simulates processing a collection of tasks to prove high throughput processing."""
         processed_count = 0
         for idx, task_payload in enumerate(tasks):
@@ -45,7 +48,6 @@ if __name__ == "__main__":
     # Self-contained operational sanity validation check
     manager = TaskCapacityManager()
     dummy_run = "RUN_20260921_01"
-    # FIXED: Added explicit numbers inside the list to pass style formatting checks
     mock_workloads = [100, 250, 500]
     print("Simulating engineering throughput tasks processing logs...")
     completed = manager.process_task_batch(dummy_run, mock_workloads)
