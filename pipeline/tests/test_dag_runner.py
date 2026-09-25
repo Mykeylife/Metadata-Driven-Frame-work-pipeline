@@ -4,15 +4,17 @@ import sqlite3
 import pytest
 from unittest.mock import MagicMock
 
-# Force Python to find the root package folder regardless of local tool configurations
+# Force the working environment to recognize the root folder path cleanly
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from pipeline.dag_runner import DAGRunner
 
 @pytest.fixture
 def setup_mock_db():
-    """Creates an ephemeral, in-memory SQLite database for testing."""
+    """Creates an ephemeral, in-memory SQLite database with required schemas."""
     conn = sqlite3.connect(":memory:")
+    # Crucial: Use Row factory to match the runtime orchestrator's behavior
+    conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
     
     # 1. Create pipeline metadata simulation orchestration tables
@@ -55,7 +57,7 @@ def test_fetch_pipeline_tasks(setup_mock_db, monkeypatch):
     conn = setup_mock_db
     cursor = conn.cursor()
     
-    # Insert structured mock sequence layers
+    # Insert mock entries ordered by execution sequence logic
     cursor.execute("INSERT INTO pipeline_metadata (step_name, target_table, execution_order, is_active) VALUES ('Extract Users', 'staging_users', 1, 1);")
     cursor.execute("INSERT INTO pipeline_metadata (step_name, target_table, execution_order, is_active) VALUES ('Transform KPIs', 'analytics_kpis', 3, 1);")
     conn.commit()
@@ -66,6 +68,7 @@ def test_fetch_pipeline_tasks(setup_mock_db, monkeypatch):
     tasks = runner.fetch_pipeline_tasks()
     
     assert len(tasks) == 2
+    # Corrected: Access list of Row elements using explicitly mapped string keys
     assert tasks[0]["step_name"] == "Extract Users"
     assert tasks[1]["step_name"] == "Transform KPIs"
 
@@ -87,9 +90,10 @@ def test_log_execution_trail(setup_mock_db, monkeypatch):
     log_row = cursor.fetchone()
     
     assert log_row is not None
-    assert log_row[0] == "test-uuid-1234"
-    assert log_row[2] == "FAILED"
-    assert log_row[3] == "Simulated connection exception drop."
+    # Corrected: Use explicit string column lookups instead of integer indices
+    assert log_row["run_id"] == "test-uuid-1234"
+    assert log_row["status"] == "FAILED"
+    assert log_row["error_message"] == "Simulated connection exception drop."
 
 def test_run_pipeline_halt_on_quality_gate_breach(setup_mock_db, monkeypatch):
     """Validates that the orchestrator actively halts operational execution upon quality breaches."""
@@ -103,7 +107,7 @@ def test_run_pipeline_halt_on_quality_gate_breach(setup_mock_db, monkeypatch):
     runner = DAGRunner(db_path=":memory:")
     monkeypatch.setattr(runner, "_get_db_connection", lambda: conn)
     
-    # Force task logic success, but leave 'staging_users' table completely empty to trip row count check
+    # Force task logic execution to succeed, but keep table empty to trigger validator row count gate
     runner.execute_task_logic = MagicMock(return_value=True)
     
     runner.run_pipeline()
@@ -112,4 +116,5 @@ def test_run_pipeline_halt_on_quality_gate_breach(setup_mock_db, monkeypatch):
     failure_log = cursor.fetchone()
     
     assert failure_log is not None
-    assert "Data quality validation failed" in failure_log[1]
+    # Corrected: Safe string-key lookups matching the row object definitions
+    assert "Data quality validation failed" in failure_log["error_message"]
