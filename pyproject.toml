@@ -1,5 +1,6 @@
 [tool.poetry]
 name = "metadata-driven-frame-work-pipeline"
+package-mode = false   # <--- Add this exact line here
 version = "0.1.0"
 description = "A metadata-driven pipeline orchestrator with SQLite backing"
 authors = ["Olanrewaju Micheal Akinbode <mykeylife6@gmail.com>"]
