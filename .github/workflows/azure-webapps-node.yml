@@ -22,14 +22,14 @@ jobs:
     - name: Install Poetry
       run: pipx install poetry
 
-    - name: Install Base Quality Tools
-      run: pip install mypy pytest pytest-cov
-
     - name: Install dependencies
-      run: poetry install --no-root
+      # Changed: Explicitly install the root workspace app structure properly
+      run: poetry install
 
     - name: Static type check with Mypy
-      run: mypy . --ignore-missing-imports
+      # Fixed: Running via poetry run prevents namespace compilation drift
+      run: poetry run mypy --explicit-package-bases pipeline tests
 
     - name: Run tests with code coverage
-      run: pytest --cov=. --cov-report=term-missing --cov-fail-under=40
+      # Fixed: Prefixing python path inside poetry ensures zero module import drops
+      run: poetry run env PYTHONPATH=. pytest --cov=pipeline --cov-report=term-missing --cov-fail-under=40
