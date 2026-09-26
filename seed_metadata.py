@@ -2,8 +2,46 @@ import json
 import os
 import sqlite3
 
-DB_PATH = "metadata_control.db"
+# FIX (Item 3): Import the centralized database path configuration logic
+from pipeline.config import get_db_path
+
+DB_PATH = get_db_path()
 CONFIG_PATH = "pipeline_config.json"
+
+# FIX (Item 5): Centralize SQL structural DDL schemas into a single dictionary
+TABLE_SCHEMAS = {
+    "pipeline_metadata": """
+        CREATE TABLE IF NOT EXISTS pipeline_metadata (
+            step_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            step_name TEXT NOT NULL,
+            target_table TEXT NOT NULL,
+            execution_order INTEGER NOT NULL,
+            is_active INTEGER DEFAULT 1
+        );
+    """,
+    "staging_users": """
+        CREATE TABLE IF NOT EXISTS staging_users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT NOT NULL
+        );
+    """,
+    "analytics_kpis": """
+        CREATE TABLE IF NOT EXISTS analytics_kpis (
+            kpi_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT NOT NULL,
+            username_length INTEGER NOT NULL,
+            processed_at TEXT NOT NULL
+        );
+    """,
+    "summary_metrics": """
+        CREATE TABLE IF NOT EXISTS summary_metrics (
+            summary_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            metric_name TEXT NOT NULL,
+            metric_value TEXT NOT NULL,
+            calculated_at TEXT NOT NULL
+        );
+    """
+}
 
 
 def seed_pipeline_database() -> None:
@@ -19,44 +57,10 @@ def seed_pipeline_database() -> None:
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
 
-    # 1. Enforce schema existence for core control metadata
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS pipeline_metadata (
-            step_id INTEGER PRIMARY KEY AUTOINCREMENT,
-            step_name TEXT NOT NULL,
-            target_table TEXT NOT NULL,
-            execution_order INTEGER NOT NULL,
-            is_active INTEGER DEFAULT 1
-        );
-    """)
-
-    # 2. Pre-create business data infrastructure staging tables
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS staging_users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            username TEXT NOT NULL
-        );
-    """)
-
-    # 3. Create the concrete target analytics KPI storage schema
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS analytics_kpis (
-            kpi_id INTEGER PRIMARY KEY AUTOINCREMENT,
-            username TEXT NOT NULL,
-            username_length INTEGER NOT NULL,
-            processed_at TEXT NOT NULL
-        );
-    """)
-
-    # FIX: Pre-create the new summary metrics reporting table schema
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS summary_metrics (
-            summary_id INTEGER PRIMARY KEY AUTOINCREMENT,
-            metric_name TEXT NOT NULL,
-            metric_value TEXT NOT NULL,
-            calculated_at TEXT NOT NULL
-        );
-    """)
+    # FIX (Item 5): Natively iterate through centralized definitions to provision tables cleanly
+    print("Enforcing centralized infrastructure database schemas...")
+    for table_name, schema_ddl in TABLE_SCHEMAS.items():
+        cursor.execute(schema_ddl)
 
     print(f"Seeding {len(tasks)} tasks into '{DB_PATH}'...")
     for task in tasks:
