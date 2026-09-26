@@ -1,7 +1,7 @@
 import os
 import sqlite3
 import sys
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -179,3 +179,35 @@ def test_summary_metrics_aggregation(setup_mock_db, monkeypatch):
 
     assert summary_row is not None
     assert summary_row["metric_value"] == "10"
+
+
+@patch("urllib.request.urlopen")
+def test_webhook_alert_on_failure(mock_urlopen, setup_mock_db, monkeypatch):
+    """Verifies that an automated webhook alert triggers perfectly when a step failure occurs."""
+    # Configure mock response behavior for urllib
+    mock_response = MagicMock()
+    mock_response.status = 204
+    mock_urlopen.return_value.__enter__.return_value = mock_response
+
+    conn = setup_mock_db
+    runner = DAGRunner(db_path=":memory:")
+    
+    # Mock both the DB connection and the webhook environment lookup vector
+    monkeypatch.setattr(runner, "_get_db_connection", lambda: conn)
+    monkeypatch.setattr("pipeline.dag_runner.get_webhook_url", lambda: "https://discord.com")
+
+    # Call execution logging with a FAILED status to intentionally fire the webhook flow
+    runner.log_execution(
+        run_id="webhook-test-uuid",
+        step_name="analytics_kpis",
+        status="FAILED",
+        execution_time="1.2s",
+        error_message="Quality Gate Breach: Extraction halted!"
+    )
+
+    # Confirm that urllib.request.urlopen was safely evaluated in our isolated assertion sandbox
+    assert mock_urlopen.called is True
+    
+    # Verify the argument sent to urlopen contains our targeted request object structure
+    called_req = mock_urlopen.call_args[0][0]
+    assert called_req.full_url == "https://discord.com"
