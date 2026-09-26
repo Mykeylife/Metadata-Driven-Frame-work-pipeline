@@ -31,8 +31,13 @@ jobs:
     - name: Run Database Seeder Check
       run: python seed_metadata.py
 
+    - name: Lint with ruff and black
+      run: |
+        poetry run ruff check .
+        poetry run black --check .
+
     - name: Static type check with Mypy
-      run: mypy --explicit-package-bases pipeline tests || true
+      run: mypy --explicit-package-bases pipeline tests
 
     - name: Run tests with code coverage
-      run: env PYTHONPATH=. pytest --cov=pipeline --cov-report=term-missing || true
+      run: env PYTHONPATH=. pytest --cov=pipeline --cov-report=term-missing --cov-fail-under=80
