@@ -95,7 +95,7 @@ class DAGRunner:
                 )
                 conn.commit()
             
-            # FIX: Trigger instant phone webhook alert if a task drops or fails metrics gates
+            # Trigger instant phone webhook alert if a task drops or fails metrics gates
             if status in ("FAILED", "CRITICAL"):
                 self._send_webhook_alert(run_id, step_name, status, error_message)
                 
@@ -173,45 +173,25 @@ class DAGRunner:
         try:
             tasks = self.fetch_pipeline_tasks()
             if not tasks:
-                logger.warning("No active pipeline metadata rows discovered matching criteria.")
+                logger.warning("No active pipeline metadata rows discovered.")
                 return
 
             for task in tasks:
-                step_name = task.get("step_name", "UNKNOWN_STEP")
-                logger.info(f"Initiating execution phase for step: {step_name}")
-
-                self.log_execution(run_id, step_name, "RUNNING", execution_time=datetime.now(timezone.utc).isoformat())
-
-                start_timer = time.perf_counter()
-                success = self.execute_task_logic(task)
-                end_timer = time.perf_counter()
+                step_name = task["step_name"]
+                logger.info(f"Orchestrating operational task: {step_name}")
                 
-                duration_str = f"{(end_timer - start_timer):.2f} seconds"
-
+                start_time = time.time()
+                self.log_execution(run_id, step_name, "RUNNING")
+                
+                success = self.execute_task_logic(task)
+                duration_str = f"{time.time() - start_time:.2f}s"
+                
                 if success:
-                    self.log_execution(run_id, step_name, "SUCCESS", execution_time=duration_str)
-                    logger.info(f"Completed successfully: {step_name} in {duration_str}")
+                    self.log_execution(run_id, step_name, "SUCCESS", duration_str)
                 else:
-                    error_msg = "Task script executed but returned false"
-                    self.log_execution(
-                        run_id=run_id,
-                        step_name=step_name,
-                        status="FAILED",
-                        execution_time=duration_str,
-                        error_message=error_msg,
-                    )
-                    logger.error(f"Pipeline flow stopped at step {step_name} due to verification fail.")
+                    self.log_execution(run_id, step_name, "FAILED", duration_str, "Quality gate or database logic execution failure.")
+                    logger.error(f"Pipeline flow stopped early due to step failure: {step_name}")
                     break
-
-        except Exception as global_err:
-            logger.critical(f"Critical execution barrier reached during workflow handling: {global_err}")
-            self.log_execution(
-                run_id, "GLOBAL_ORCHESTRATOR", "CRITICAL", execution_time="N/A", error_message=str(global_err)
-            )
-
-
-def main() -> None:
-    """Standalone module function serving as the entrypoint for Poetry scripts command handles."""
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+                    
+        except Exception as e:
+            logger.critical(f"Unhandled critical crash sequence within execution context: {e}")
