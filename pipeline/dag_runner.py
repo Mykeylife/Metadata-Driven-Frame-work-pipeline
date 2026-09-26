@@ -86,7 +86,7 @@ class DAGRunner:
                     logger.error(f"Quality Gate Breach: Target table '{target_table}' does not exist in schema.")
                     return False
                 
-                # 2. Check if this is our explicit transformation step
+                # 2. Step routing conditional paths
                 if target_table == "analytics_kpis":
                     logger.info("Running real data calculation loop for analytics_kpis...")
                     
@@ -115,6 +115,27 @@ class DAGRunner:
                     conn.commit()
                     logger.info(f"Successfully processed metrics for {len(users)} users inside analytics_kpis.")
                 
+                elif target_table == "summary_metrics":
+                    logger.info("Running aggregation calculation engine for summary_metrics...")
+                    
+                    # Read intermediate KPIs calculated by Step 2
+                    cursor.execute("SELECT MAX(username_length) as max_len FROM analytics_kpis;")
+                    row = cursor.fetchone()
+                    max_length = row["max_len"] if (row and row["max_len"] is not None) else 0
+                    
+                    now_str = datetime.now(timezone.utc).isoformat()
+                    
+                    # Insert calculated summaries
+                    cursor.execute(
+                        """
+                        INSERT INTO summary_metrics (metric_name, metric_value, calculated_at)
+                        VALUES (?, ?, ?);
+                        """,
+                        ("max_username_length", str(max_length), now_str)
+                    )
+                    conn.commit()
+                    logger.info(f"Successfully calculated pipeline aggregations. Max length metric found: {max_length}")
+
                 else:
                     # 3. For any other staging table, perform low-overhead population validation
                     logger.info(f"Initiating operational validation gate for staging table: {target_table}")
