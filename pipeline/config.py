@@ -1,4 +1,5 @@
 import os
+from typing import Optional
 
 # Centralized default storage path constant string
 DEFAULT_DB_PATH = "metadata_control.db"
@@ -12,4 +13,3 @@ def get_db_path() -> str:
 def get_webhook_url() -> Optional[str]:
     """Retrieves the messaging platform webhook URL from the environment vector configuration."""
     return os.getenv("PIPELINE_WEBHOOK_URL")
-    
