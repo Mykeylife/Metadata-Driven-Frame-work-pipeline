@@ -48,9 +48,18 @@ def seed_pipeline_database() -> None:
         );
     """)
 
+    # FIX: Pre-create the new summary metrics reporting table schema
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS summary_metrics (
+            summary_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            metric_name TEXT NOT NULL,
+            metric_value TEXT NOT NULL,
+            calculated_at TEXT NOT NULL
+        );
+    """)
+
     print(f"Seeding {len(tasks)} tasks into '{DB_PATH}'...")
     for task in tasks:
-        # Clear down existing mapping flags cleanly to allow updates on identical rows
         cursor.execute("DELETE FROM pipeline_metadata WHERE step_name = ?;", (task["step_name"],))
         
         cursor.execute(
