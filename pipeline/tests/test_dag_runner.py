@@ -13,7 +13,7 @@ from pipeline.dag_runner import DAGRunner
 
 @pytest.fixture
 def setup_mock_db():
-    """Creates an ephemeral, in-memory SQLite database with required schemas."""
+    """Creates an ephemeral, in-memory SQLite database with required production schemas."""
     conn = sqlite3.connect(":memory:")
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
@@ -22,21 +22,23 @@ def setup_mock_db():
     cursor.execute("""
         CREATE TABLE pipeline_metadata (
             step_id INTEGER PRIMARY KEY AUTOINCREMENT,
-            step_name TEXT,
-            target_table TEXT,
-            execution_order INTEGER,
-            is_active INTEGER
+            step_name TEXT NOT NULL UNIQUE,
+            target_table TEXT NOT NULL,
+            execution_order INTEGER NOT NULL,
+            is_active INTEGER DEFAULT 1
         );
     """)
 
-    # 2. Create pipeline operational tracking execution log tables
+    # 2. Create pipeline operational tracking execution log tables with updated biometric columns
     cursor.execute("""
         CREATE TABLE pipeline_execution_logs (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            run_id TEXT,
-            step_name TEXT,
-            status TEXT,
-            execution_time TEXT,
+            run_id TEXT NOT NULL,
+            step_name TEXT NOT NULL,
+            status TEXT NOT NULL,
+            execution_time TEXT NOT NULL,
+            peak_memory_kb INTEGER DEFAULT 0,
+            cpu_time_seconds REAL DEFAULT 0.0,
             error_message TEXT
         );
     """)
@@ -45,7 +47,7 @@ def setup_mock_db():
     cursor.execute("""
         CREATE TABLE staging_users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            username TEXT NOT NULL
+            username TEXT NOT NULL UNIQUE
         );
     """)
 
@@ -63,7 +65,7 @@ def setup_mock_db():
     cursor.execute("""
         CREATE TABLE summary_metrics (
             summary_id INTEGER PRIMARY KEY AUTOINCREMENT,
-            metric_name TEXT NOT NULL,
+            metric_name TEXT NOT NULL UNIQUE,
             metric_value TEXT NOT NULL,
             calculated_at TEXT NOT NULL
         );
@@ -98,7 +100,7 @@ def test_fetch_pipeline_tasks(setup_mock_db, monkeypatch):
 
 
 def test_log_execution_trail(setup_mock_db, monkeypatch):
-    """Ensures logs correctly append runtime state snapshots to the database."""
+    """Ensures logs correctly append runtime state snapshots and biometrics to the database."""
     conn = setup_mock_db
     runner = DAGRunner(db_path=":memory:")
     monkeypatch.setattr(runner, "_get_db_connection", lambda: conn)
@@ -113,7 +115,7 @@ def test_log_execution_trail(setup_mock_db, monkeypatch):
 
     cursor = conn.cursor()
     cursor.execute(
-        "SELECT run_id, step_name, status, execution_time, error_message FROM pipeline_execution_logs;"
+        "SELECT run_id, step_name, status, execution_time, peak_memory_kb, cpu_time_seconds, error_message FROM pipeline_execution_logs;"
     )
     log_row = cursor.fetchone()
 
@@ -121,6 +123,8 @@ def test_log_execution_trail(setup_mock_db, monkeypatch):
     assert log_row["run_id"] == "test-uuid-1234"
     assert log_row["status"] == "FAILED"
     assert "seconds" in log_row["execution_time"]
+    assert log_row["peak_memory_kb"] >= 0
+    assert log_row["cpu_time_seconds"] >= 0.0
     assert log_row["error_message"] == "Simulated connection exception drop."
 
 
