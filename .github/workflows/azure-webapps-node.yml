@@ -25,14 +25,13 @@ jobs:
       run: pip install poetry
 
     - name: Automatically Repair and Sync Lockfile
-      # FIX: Removed the non-existent --no-update flag so it locks normally
       run: |
         poetry lock
 
     - name: Install Dependencies from Lockfile
       run: |
         poetry config virtualenvs.create false
-        poetry install --no-root --no-interaction --sync
+        poetry install --no-root --no-interaction
 
     - name: Run Database Seeder Check
       run: python seed_metadata.py
@@ -53,7 +52,6 @@ jobs:
       if: github.ref == 'refs/heads/main'
       run: |
         git config --global user.name "github-actions[bot]"
-        # FIX: Cleaned up the malformed bot email syntax 
         git config --global user.email "github-actions[bot]@users.noreply.github.com"
         git add poetry.lock
         git diff-index --quiet HEAD || git commit -m "chore: auto-align lockfile to resolve DataFactor Item 7"
