@@ -118,21 +118,38 @@ class DAGRunner:
             return False
 
         # --- LIVE DATA QUALITY GATE BREACH BARRIER ---
-        # Override connection sub-context dynamically to match mocking environments if present
         self.validator._get_db_connection = lambda: self._get_db_connection()
         if not self.validator.validate_step(task):
             logger.error(f"Quality Gate Breach: Pre-execution validations failed for step '{step_name}' on table '{target_table}'. Stopping execution pipeline loop.")
             return False
 
+        # Generate a distinct sanitized savepoint target identifier string
+        savepoint_id = f"sp_{target_table}"
+
         try:
             with self._get_db_connection() as conn:
                 cursor = conn.cursor()
+                
+                # --- START SAVEPOINT TRANSACTION BLOCK ---
+                logger.info(f"Establishing atomic savepoint block tracking handle: {savepoint_id}")
+                cursor.execute(f"SAVEPOINT {savepoint_id};")
+                
+                cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name=?;", (target_table,))
+                if not cursor.fetchone():
+                    logger.error(f"Quality Gate Breach: Target table '{target_table}' does not exist in schema.")
+                    cursor.execute(f"ROLLBACK TO SAVEPOINT {savepoint_id};")
+                    return False
                 
                 if target_table == "analytics_kpis":
                     logger.info("Running real data calculation loop for analytics_kpis...")
                     cursor.execute("SELECT username FROM staging_users;")
                     users = cursor.fetchall()
                     
+                    if not users:
+                        logger.error("Quality Gate Breach: Extraction halted! Source 'staging_users' table has no records.")
+                        cursor.execute(f"ROLLBACK TO SAVEPOINT {savepoint_id};")
+                        return False
+                        
                     now_str = datetime.now(timezone.utc).isoformat()
                     for user in users:
                         username = user["username"]
@@ -158,12 +175,26 @@ class DAGRunner:
                     logger.info(f"Successfully calculated pipeline aggregations. Max length metric found: {max_length}")
 
                 else:
-                    logger.info(f"Operational validation gate for staging table '{target_table}' completed successfully.")
+                    logger.info(f"Initiating operational validation gate for staging table: {target_table}")
+                    cursor.execute(f"SELECT 1 FROM {target_table} LIMIT 1;")
+                    if not cursor.fetchone():
+                        logger.error(f"Quality Gate Breach: Ingestion halted! Table '{target_table}' is empty.")
+                        cursor.execute(f"ROLLBACK TO SAVEPOINT {savepoint_id};")
+                        return False
+                
+                # --- RELEASE SAVEPOINT TRANSACTION CONTEXT ON SUCCESS ---
+                cursor.execute(f"RELEASE SAVEPOINT {savepoint_id};")
                     
             return True
             
         except sqlite3.Error as e:
-            logger.error(f"Database error encountered during logic execution on '{target_table}': {e}")
+            logger.error(f"Database error encountered during logic execution on '{target_table}': {e}. Rolling back mutations.")
+            # Safety handle execution fallback logic path to protect table state metrics
+            try:
+                with self._get_db_connection() as rollback_conn:
+                    rollback_conn.cursor().execute(f"ROLLBACK TO SAVEPOINT {savepoint_id};")
+            except Exception as inner_err:
+                logger.error(f"Failed to issue isolation fallback rollback command sequence: {inner_err}")
             return False
 
     def run_pipeline(self) -> None:
@@ -174,25 +205,3 @@ class DAGRunner:
         try:
             tasks = self.fetch_pipeline_tasks()
             if not tasks:
-                logger.warning("No active pipeline metadata rows discovered.")
-                return
-
-            for task in tasks:
-                step_name = task["step_name"]
-                logger.info(f"Orchestrating operational task: {step_name}")
-                
-                start_time = time.time()
-                self.log_execution(run_id, step_name, "RUNNING")
-                
-                success = self.execute_task_logic(task)
-                duration_str = f"{time.time() - start_time:.2f}s"
-                
-                if success:
-                    self.log_execution(run_id, step_name, "SUCCESS", duration_str)
-                else:
-                    self.log_execution(run_id, step_name, "FAILED", duration_str, "Quality gate or database logic execution failure.")
-                    logger.error(f"Pipeline flow stopped early due to step failure: {step_name}")
-                    break
-                    
-        except Exception as e:
-            logger.critical(f"Unhandled critical crash sequence within execution context: {e}")
