@@ -59,6 +59,16 @@ def setup_mock_db():
         );
     """)
 
+    # 5. Create target summary metrics reporting storage schema to match production
+    cursor.execute("""
+        CREATE TABLE summary_metrics (
+            summary_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            metric_name TEXT NOT NULL,
+            metric_value TEXT NOT NULL,
+            calculated_at TEXT NOT NULL
+        );
+    """)
+
     conn.commit()
     yield conn
     conn.close()
@@ -119,7 +129,7 @@ def test_real_kpi_transformation_loop(setup_mock_db, monkeypatch):
     conn = setup_mock_db
     cursor = conn.cursor()
 
-    # 1. Populate source data table with concrete text records to test transformation math
+    # Populate source data table with concrete text records to test transformation math
     cursor.execute("INSERT INTO staging_users (username) VALUES ('Olanrewaju');")
     cursor.execute("INSERT INTO staging_users (username) VALUES ('Myke');")
     conn.commit()
@@ -127,13 +137,13 @@ def test_real_kpi_transformation_loop(setup_mock_db, monkeypatch):
     runner = DAGRunner(db_path=":memory:")
     monkeypatch.setattr(runner, "_get_db_connection", lambda: conn)
 
-    # 2. Fire live calculation processing layer for target schema
+    # Fire live calculation processing layer for target schema
     task_definition = {"target_table": "analytics_kpis", "step_name": "Transform Metric KPIs"}
     success = runner.execute_task_logic(task_definition)
 
     assert success is True
 
-    # 3. Validate string measurement calculations are natively accurate
+    # Validate string measurement calculations are natively accurate
     cursor.execute("SELECT username, username_length FROM analytics_kpis ORDER BY username_length DESC;")
     records = cursor.fetchall()
 
@@ -142,3 +152,30 @@ def test_real_kpi_transformation_loop(setup_mock_db, monkeypatch):
     assert records[0]["username_length"] == 10  # Len of 'Olanrewaju'
     assert records[1]["username"] == "Myke"
     assert records[1]["username_length"] == 4   # Len of 'Myke'
+
+
+def test_summary_metrics_aggregation(setup_mock_db, monkeypatch):
+    """Validates that the orchestrator accurately aggregates metrics from intermediate tables."""
+    conn = setup_mock_db
+    cursor = conn.cursor()
+
+    # 1. Seed the intermediate table with mock calculation records
+    cursor.execute("INSERT INTO analytics_kpis (username, username_length, processed_at) VALUES ('Olanrewaju', 10, '2026-09-26');")
+    cursor.execute("INSERT INTO analytics_kpis (username, username_length, processed_at) VALUES ('Myke', 4, '2026-09-26');")
+    conn.commit()
+
+    runner = DAGRunner(db_path=":memory:")
+    monkeypatch.setattr(runner, "_get_db_connection", lambda: conn)
+
+    # 2. Run the summary aggregation logic step
+    task_definition = {"target_table": "summary_metrics", "step_name": "Aggregate Analytics Metrics"}
+    success = runner.execute_task_logic(task_definition)
+
+    assert success is True
+
+    # 3. Assert the MAX operation accurately saved '10' to the summary table
+    cursor.execute("SELECT metric_name, metric_value FROM summary_metrics WHERE metric_name = 'max_username_length';")
+    summary_row = cursor.fetchone()
+
+    assert summary_row is not None
+    assert summary_row["metric_value"] == "10"
