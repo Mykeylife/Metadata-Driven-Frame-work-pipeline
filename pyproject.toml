@@ -1,7 +1,7 @@
 [project]
 name = "metadata-driven-frame-work-pipeline"
 version = "0.1.0"
-description = "A metadata-driven pipeline orchestrator with SQLite backing"
+description = "A production-grade local metadata-driven pipeline orchestrator with built-in quality gates and webhook telemetry."
 authors = [
     { name = "Olanrewaju Micheal Akinbode", email = "mykeylife6@gmail.com" }
 ]
@@ -42,7 +42,9 @@ ignore = []
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
-testpaths = ["test_dag_runner.py"]
+testpaths = ["tests"]
+addopts = "-ra -q --cov=pipeline --cov-report=term-missing"
 
 [tool.poetry.scripts]
-pipeline = "pipeline.dag_runner:main"
+pipeline = "orchestrator:main"
+init-db = "init_simulation_db:init_db"
