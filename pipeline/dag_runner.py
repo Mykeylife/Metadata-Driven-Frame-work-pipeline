@@ -161,13 +161,17 @@ class DAGRunner:
 
                 if success:
                     # 4. Handle successful runs and save metrics
-                    self.log_execution(run_id, run_id if step_name == "GLOBAL_ORCHESTRATOR" else step_name, "SUCCESS", execution_time=duration_str)
+                    self.log_execution(run_id, step_name, "SUCCESS", execution_time=duration_str)
                     logger.info(f"Completed successfully: {step_name} in {duration_str}")
                 else:
                     # 5. Handle logical failure states and save metric duration
                     error_msg = "Task script executed but returned false"
                     self.log_execution(
-                        run_id, step_name, "FAILED", execution_time=duration_str, error_message=error_msg
+                        run_id=run_id,
+                        step_name=step_name,
+                        status="FAILED",
+                        execution_time=duration_str,
+                        error_message=error_msg,
                     )
                     logger.error(
                         f"Pipeline flow stopped at step {step_name} due to verification fail."
@@ -180,14 +184,19 @@ class DAGRunner:
             )
             self.log_execution(
                 run_id, "GLOBAL_ORCHESTRATOR", "CRITICAL", execution_time="N/A", error_message=str(global_err)
-              )
+            )
 
 
-if __name__ == "__main__":
-    # Allows fast debugging execution directly via python pipeline/dag_runner.py
+def main() -> None:
+    """Standalone module function serving as the entrypoint for Poetry scripts command handles."""
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     )
     runner = DAGRunner()
     runner.run_pipeline()
+
+
+if __name__ == "__main__":
+    # Allows fast debugging execution directly via python pipeline/dag_runner.py
+    main()
