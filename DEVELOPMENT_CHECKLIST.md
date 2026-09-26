@@ -15,10 +15,11 @@ A centralized tracking matrix mapping upcoming feature paths, security hardening
 
 ## 🚀 Phase 2: Structural Hardening & Ingestion Gates (Current)
 - [ ] **Custom Ingestion Validators (`pipeline/validators.py`)**:
-  - [ ] Implement an structural regex checker to validate incoming `staging_users.username` syntax boundaries before data mutations occur.
+  - [x] Implement a structural regex checker to validate incoming `staging_users.username` syntax boundaries before data mutations occur.
   - [ ] Build an atomic schema checker to verify table formatting structures match expected column layouts upon application boot.
-- [ ] **Advanced Logging Telemetry Enhancement**:
-  - [ ] Extend `pipeline_execution_logs` mapping parameters to capture raw system biometric snapshots (e.g., peak memory consumption bytes, CPU utilization ratios) per task run.
+- [x] **Advanced Logging Telemetry Enhancement (Completed)**:
+  - [x] Extend `pipeline_execution_logs` mapping parameters to capture raw system biometric snapshots (`peak_memory_kb` and `cpu_time_seconds`) per task run.
+  - [x] Integrate standard `resource` libraries to calculate system footprints natively without third-party dependencies.
   - [ ] Design an automatic file rotating log handler mechanism to preserve physical workspace log assets locally.
 - [ ] **Transaction Containment & Error Handling**:
   - [ ] Add strict `SAVEPOINT` transaction check blocks into database execution scripts to ensure robust data rollback operations on structural processing exceptions.
@@ -26,10 +27,12 @@ A centralized tracking matrix mapping upcoming feature paths, security hardening
 ---
 
 ## 📦 Phase 3: Integration Blueprints & Cloud Extensions (Upcoming)
-- [ ] **Docker Production Distros**:
-  - [ ] Optimize the local container workspace environment using multi-stage lightweight Alpine Linux base builds.
+- [x] **Docker Production Distros**:
+  - [x] Optimize the local container workspace environment using multi-stage lightweight Python-slim base builds.
+- [x] **Proprietary Commercial Licensing**:
+  - [x] Replace the permissive open-source license with a strict Proprietary Commercial Copyright Notice to fully protect source code equity.
 - [ ] **Azure Data Factory Coordination Strategy (`DEPLOYMENT.md`)**:
-  - [ ] Document precise procedural blueprints detailing how to run this lightweight Python engine inside Azure Data Factory infrastructure using **Self-Hosted Integration Runtimes (SHIR)** or batch compute nodes to eliminate pay-as-you-go cloud script costs.
+  - [x] Document precise theoretical procedural blueprints detailing how to run this lightweight Python engine inside Azure Data Factory infrastructure using **Self-Hosted Integration Runtimes (SHIR)** to eliminate pay-as-you-go cloud script costs.
 - [ ] **Data Factory Marketplace Licensing Layout**:
   - [ ] Design structural license enforcement hooks to enable secure software monetization models on independent developer data exchanges.
 
@@ -37,8 +40,8 @@ A centralized tracking matrix mapping upcoming feature paths, security hardening
 
 ## 🛡️ Code Quality Assurance Metrics
 * **Testing Gate**: Every single feature branch update requires an accompanying `tests/test_*.py` suite module to safeguard workspace functionality.
-* **Coverage Target**: Ensure project test matrices maintain **>85% coverage depth** using `poetry run coverage report -m`.
+* **Coverage Target**: Ensure project test matrices maintain **>85% coverage depth** using `poetry run pytest`.
 * **Linting Conformity**: Prior to upstream pull requests, run codebase files through local code style sweeps:
   ```bash
-  poetry run black . && poetry run flake8 .
+  poetry run black . && poetry run ruff check .
   ```
