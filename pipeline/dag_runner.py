@@ -1,5 +1,6 @@
 import logging
 import sqlite3
+import time
 import uuid
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
@@ -45,6 +46,7 @@ class DAGRunner:
         run_id: str,
         step_name: str,
         status: str,
+        execution_time: str = "N/A",
         error_message: Optional[str] = None,
     ) -> None:
         """Writes execution logs directly to pipeline_execution_logs to maintain tracking telemetry."""
@@ -55,10 +57,9 @@ class DAGRunner:
         try:
             with self._get_db_connection() as conn:
                 cursor = conn.cursor()
-                now_str = datetime.now(timezone.utc).isoformat()
                 cursor.execute(
                     insert_query,
-                    (run_id, step_name, status, now_str, error_message),
+                    (run_id, step_name, status, execution_time, error_message),
                 )
                 conn.commit()
         except sqlite3.Error as e:
@@ -122,20 +123,25 @@ class DAGRunner:
                 logger.info(f"Initiating execution phase for step: {step_name}")
 
                 # 1. Log running lifecycle state
-                self.log_execution(run_id, step_name, "RUNNING")
+                self.log_execution(run_id, step_name, "RUNNING", execution_time=datetime.now(timezone.utc).isoformat())
 
-                # 2. Execute target transformation/ingestion logic
+                # 2. Start high-precision timer before executing task logic
+                start_timer = time.perf_counter()
                 success = self.execute_task_logic(task)
+                end_timer = time.perf_counter()
+                
+                # 3. Compute execution duration string format
+                duration_str = f"{(end_timer - start_timer):.2f} seconds"
 
                 if success:
-                    # 3. Handle successful runs
-                    self.log_execution(run_id, step_name, "SUCCESS")
-                    logger.info(f"Completed successfully: {step_name}")
+                    # 4. Handle successful runs and save metrics
+                    self.log_execution(run_id, step_name, "SUCCESS", execution_time=duration_str)
+                    logger.info(f"Completed successfully: {step_name} in {duration_str}")
                 else:
-                    # 4. Handle logical failure states
+                    # 5. Handle logical failure states and save metric duration
                     error_msg = "Task script executed but returned false"
                     self.log_execution(
-                        run_id, step_name, "FAILED", error_message=error_msg
+                        run_id, step_name, "FAILED", execution_time=duration_str, error_message=error_msg
                     )
                     logger.error(
                         f"Pipeline flow stopped at step {step_name} due to verification fail."
@@ -147,7 +153,7 @@ class DAGRunner:
                 f"Critical execution barrier reached during workflow handling: {global_err}"
             )
             self.log_execution(
-                run_id, "GLOBAL_ORCHESTRATOR", "CRITICAL", str(global_err)
+                run_id, "GLOBAL_ORCHESTRATOR", "CRITICAL", execution_time="N/A", error_message=str(global_err)
             )
 
 
