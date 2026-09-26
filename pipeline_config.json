@@ -1,0 +1,14 @@
+[
+  {
+    "step_name": "Extract Staging Users",
+    "target_table": "staging_users",
+    "execution_order": 1,
+    "is_active": 1
+  },
+  {
+    "step_name": "Transform Metric KPIs",
+    "target_table": "analytics_kpis",
+    "execution_order": 2,
+    "is_active": 1
+  }
+]
