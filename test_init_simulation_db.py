@@ -35,6 +35,15 @@ def test_database_initialization_and_schema_completeness(test_db_path):
     assert "analytics_kpis" in tables
     assert "summary_metrics" in tables
     
+    # Assert that the logging table features the new biometric monitoring fields
+    cursor.execute("PRAGMA table_info(pipeline_execution_logs);")
+    columns = {row["name"]: row["type"] for row in cursor.fetchall()}
+    
+    assert "peak_memory_kb" in columns
+    assert "cpu_time_seconds" in columns
+    assert columns["peak_memory_kb"] == "INTEGER"
+    assert columns["cpu_time_seconds"] == "REAL"
+    
     # Assert that core sequential workflow steps were accurately seeded
     cursor.execute("SELECT step_name, target_table FROM pipeline_metadata ORDER BY execution_order ASC;")
     seeded_tasks = cursor.fetchall()
