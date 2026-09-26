@@ -60,7 +60,7 @@ def test_fetch_pipeline_tasks(setup_mock_db, monkeypatch):
     conn = setup_mock_db
     cursor = conn.cursor()
 
-    # FIX: Insert full parameter pairs to satisfy explicit table constraints
+    # Insert full parameter pairs to satisfy explicit table constraints
     cursor.execute(
         "INSERT INTO pipeline_metadata (step_name, target_table, execution_order, is_active) VALUES ('Extract Users', 'staging_users', 1, 1);"
     )
@@ -75,7 +75,7 @@ def test_fetch_pipeline_tasks(setup_mock_db, monkeypatch):
     tasks = runner.fetch_pipeline_tasks()
 
     assert len(tasks) == 2
-    # FIX: Correct sequential index assertions on the returned list items
+    # Correct sequential index assertions on the returned list items
     assert tasks[0]["step_name"] == "Extract Users"
     assert tasks[1]["step_name"] == "Transform KPIs"
 
@@ -90,20 +90,21 @@ def test_log_execution_trail(setup_mock_db, monkeypatch):
         run_id="test-uuid-1234",
         step_name="staging_users",
         status="FAILED",
+        execution_time="0.05 seconds",
         error_message="Simulated connection exception drop.",
     )
 
     cursor = conn.cursor()
-    # FIX: Corrected table lookup query text formatting
     cursor.execute(
-        "SELECT run_id, step_name, status, error_message FROM pipeline_execution_logs;"
+        "SELECT run_id, step_name, status, execution_time, error_message FROM pipeline_execution_logs;"
     )
     log_row = cursor.fetchone()
 
     assert log_row is not None
-    # Access using explicit string keys mapped from the row object columns
     assert log_row["run_id"] == "test-uuid-1234"
     assert log_row["status"] == "FAILED"
+    # FIX: Explicitly verify that the duration metrics string is preserved
+    assert "seconds" in log_row["execution_time"]
     assert log_row["error_message"] == "Simulated connection exception drop."
 
 
@@ -121,12 +122,13 @@ def test_run_pipeline_halt_on_quality_gate_breach(setup_mock_db, monkeypatch):
     runner = DAGRunner(db_path=":memory:")
     monkeypatch.setattr(runner, "_get_db_connection", lambda: conn)
 
-    # Custom simulation function to mimic a failing execution due to validation breach
+    # FIX: Updated mock signature to gracefully accept the runtime execution_time keyword argument
     def mock_execute_task_logic(task):
         runner.log_execution(
             run_id="mock-run-id",
             step_name=task["step_name"],
             status="FAILED",
+            execution_time="0.00 seconds",
             error_message="Data quality validation failed: row count check is zero.",
         )
         return False
@@ -138,10 +140,10 @@ def test_run_pipeline_halt_on_quality_gate_breach(setup_mock_db, monkeypatch):
 
     cursor = conn.cursor()
     cursor.execute(
-        "SELECT status, error_message FROM pipeline_execution_logs WHERE step_name = 'Load Users Step' AND status = 'FAILED';"
+        "SELECT status, execution_time, error_message FROM pipeline_execution_logs WHERE step_name = 'Load Users Step' AND status = 'FAILED';"
     )
     failure_log = cursor.fetchone()
 
     assert failure_log is not None
-    # Safe string-key lookups matching row object definitions
+    assert "seconds" in failure_log["execution_time"]
     assert "Data quality validation failed" in failure_log["error_message"]
