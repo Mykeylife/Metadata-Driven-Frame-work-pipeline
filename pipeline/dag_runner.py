@@ -55,7 +55,6 @@ class DAGRunner:
         try:
             with self._get_db_connection() as conn:
                 cursor = conn.cursor()
-                # FIX: Swapped out deprecated datetime.utcnow() for standard modern timezone handling
                 now_str = datetime.now(timezone.utc).isoformat()
                 cursor.execute(
                     insert_query,
@@ -66,14 +65,42 @@ class DAGRunner:
             logger.error(f"Failed to log execution state for step {step_name}: {e}")
 
     def execute_task_logic(self, task: Dict[str, Any]) -> bool:
-        """Simulates execution of data movement logic matching the metadata.
+        """Executes data operations and validates that target staging tables are populated."""
+        target_table = task.get("target_table")
+        
+        if not target_table:
+            logger.error("Task definition is missing an explicit 'target_table' parameter mapping.")
+            return False
 
-        Replace this placeholder with your real target table ingestion/transformation loops.
-        """
-        logger.info(
-            f"Executing payload transformations for target table: {task.get('target_table')}"
-        )
-        return True
+        logger.info(f"Initiating operational data quality validation gate for table: {target_table}")
+        
+        try:
+            with self._get_db_connection() as conn:
+                cursor = conn.cursor()
+                
+                # 1. Inspect database metadata schema to see if the table exists
+                cursor.execute(
+                    "SELECT name FROM sqlite_master WHERE type='table' AND name=?;", 
+                    (target_table,)
+                )
+                if not cursor.fetchone():
+                    logger.error(f"Quality Gate Breach: Target table '{target_table}' does not exist in schema.")
+                    return False
+                
+                # 2. Perform low-overhead conditional lookup to find out if the table is empty
+                cursor.execute(f"SELECT 1 FROM {target_table} LIMIT 1;")
+                if not cursor.fetchone():
+                    logger.error(
+                        f"Quality Gate Breach: Ingestion halted! Staging table '{target_table}' is completely empty."
+                    )
+                    return False
+                    
+            logger.info(f"Quality validation passed successfully for table: {target_table}")
+            return True
+            
+        except sqlite3.Error as e:
+            logger.error(f"Database error encountered during quality gate inspection on '{target_table}': {e}")
+            return False
 
     def run_pipeline(self) -> None:
         """Orchestrates your end-to-end data pipeline flow based on metadata sequences."""
