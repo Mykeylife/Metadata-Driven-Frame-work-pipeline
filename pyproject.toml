@@ -1,48 +1,58 @@
-[project]
-name = "metadata-driven-frame-work-pipeline"
-version = "0.1.0"
-description = "A metadata-driven pipeline orchestrator with SQLite backing"
-authors = [
-    { name = "Olanrewaju Micheal Akinbode", email = "mykeylife6@gmail.com" }
-]
-requires-python = ">=3.11"
-dependencies = []
+name: CI/CD Pipeline
 
-[tool.poetry]
-package-mode = false
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
 
-[tool.poetry.group.dev.dependencies]
-mypy = "^1.11.0"
-pytest = "^8.0.0"
-pytest-cov = "^5.0.0"
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
 
-[tool.black]
-line-length = 88
-target-version = ['py311']
-include = '\.pyi?$'
-exclude = '''
-/(
-    \.git
-  | \.hg
-  | \.mypy_cache
-  | \.tox
-  | \.venv
-  | _build
-  | buck-out
-  | build
-  | dist
-)/
-'''
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
 
-[tool.ruff]
-line-length = 88
-target-version = "py311"
-select = ["E", "F", "W", "I", "N", "UP", "B", "C4"]
-ignore = []
+    - name: Set up Python 3.11
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
 
-[tool.pytest.ini_options]
-pythonpath = ["."]
-testpaths = ["tests", "pipeline/tests"]
+    - name: Install Poetry
+      run: pip install poetry
 
-[tool.poetry.scripts]
-pipeline = "pipeline.dag_runner:main"
+    - name: Automatically Repair and Sync Lockfile
+      run: |
+        poetry lock --no-update
+
+    - name: Install Dependencies from Lockfile
+      run: |
+        poetry config virtualenvs.create false
+        poetry install --no-root --no-interaction --sync
+
+    - name: Run Database Seeder Check
+      run: python seed_metadata.py
+
+    - name: Lint with ruff and black
+      run: |
+        pip install ruff black
+        ruff check .
+        black --check .
+
+    - name: Static type check with Mypy
+      run: mypy --explicit-package-bases pipeline tests
+
+    - name: Run tests with code coverage
+      run: env PYTHONPATH=. pytest --cov=pipeline --cov-report=term-missing --cov-fail-under=80
+
+    - name: Auto-Commit Fixed Lockfile back to Repo
+      if: github.ref == 'refs/heads/main'
+      run: |
+        git config --global user.name "github-actions[bot]"
+        git config --global user.email "github-actions[bot]@://github.com"
+        git add poetry.lock
+        git diff-index --quiet HEAD || git commit -m "chore: auto-align lockfile to resolve DataFactor Item 7"
+        git push
