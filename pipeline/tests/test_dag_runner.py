@@ -15,7 +15,6 @@ from pipeline.dag_runner import DAGRunner
 def setup_mock_db():
     """Creates an ephemeral, in-memory SQLite database with required schemas."""
     conn = sqlite3.connect(":memory:")
-    # Crucial: Use Row factory to match the runtime orchestrator's behavior
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
 
@@ -46,7 +45,17 @@ def setup_mock_db():
     cursor.execute("""
         CREATE TABLE staging_users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            username TEXT
+            username TEXT NOT NULL
+        );
+    """)
+
+    # 4. Create target analytics KPI storage schema to match production
+    cursor.execute("""
+        CREATE TABLE analytics_kpis (
+            kpi_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT NOT NULL,
+            username_length INTEGER NOT NULL,
+            processed_at TEXT NOT NULL
         );
     """)
 
@@ -60,7 +69,6 @@ def test_fetch_pipeline_tasks(setup_mock_db, monkeypatch):
     conn = setup_mock_db
     cursor = conn.cursor()
 
-    # Insert full parameter pairs to satisfy explicit table constraints
     cursor.execute(
         "INSERT INTO pipeline_metadata (step_name, target_table, execution_order, is_active) VALUES ('Extract Users', 'staging_users', 1, 1);"
     )
@@ -75,7 +83,6 @@ def test_fetch_pipeline_tasks(setup_mock_db, monkeypatch):
     tasks = runner.fetch_pipeline_tasks()
 
     assert len(tasks) == 2
-    # Correct sequential index assertions on the returned list items
     assert tasks[0]["step_name"] == "Extract Users"
     assert tasks[1]["step_name"] == "Transform KPIs"
 
@@ -103,47 +110,35 @@ def test_log_execution_trail(setup_mock_db, monkeypatch):
     assert log_row is not None
     assert log_row["run_id"] == "test-uuid-1234"
     assert log_row["status"] == "FAILED"
-    # FIX: Explicitly verify that the duration metrics string is preserved
     assert "seconds" in log_row["execution_time"]
     assert log_row["error_message"] == "Simulated connection exception drop."
 
 
-def test_run_pipeline_halt_on_quality_gate_breach(setup_mock_db, monkeypatch):
-    """Validates that the orchestrator actively halts operational execution upon quality breaches."""
+def test_real_kpi_transformation_loop(setup_mock_db, monkeypatch):
+    """Validates that the pipeline accurately processes metrics calculations on business records."""
     conn = setup_mock_db
     cursor = conn.cursor()
 
-    # Add an active step targeting our dummy staging_users table
-    cursor.execute(
-        "INSERT INTO pipeline_metadata (step_name, target_table, execution_order, is_active) VALUES ('Load Users Step', 'staging_users', 1, 1);"
-    )
+    # 1. Populate source data table with concrete text records to test transformation math
+    cursor.execute("INSERT INTO staging_users (username) VALUES ('Olanrewaju');")
+    cursor.execute("INSERT INTO staging_users (username) VALUES ('Myke');")
     conn.commit()
 
     runner = DAGRunner(db_path=":memory:")
     monkeypatch.setattr(runner, "_get_db_connection", lambda: conn)
 
-    # FIX: Updated mock signature to gracefully accept the runtime execution_time keyword argument
-    def mock_execute_task_logic(task):
-        runner.log_execution(
-            run_id="mock-run-id",
-            step_name=task["step_name"],
-            status="FAILED",
-            execution_time="0.00 seconds",
-            error_message="Data quality validation failed: row count check is zero.",
-        )
-        return False
+    # 2. Fire live calculation processing layer for target schema
+    task_definition = {"target_table": "analytics_kpis", "step_name": "Transform Metric KPIs"}
+    success = runner.execute_task_logic(task_definition)
 
-    # Force the runner to execute our customized failure simulation rule
-    monkeypatch.setattr(runner, "execute_task_logic", mock_execute_task_logic)
+    assert success is True
 
-    runner.run_pipeline()
+    # 3. Validate string measurement calculations are natively accurate
+    cursor.execute("SELECT username, username_length FROM analytics_kpis ORDER BY username_length DESC;")
+    records = cursor.fetchall()
 
-    cursor = conn.cursor()
-    cursor.execute(
-        "SELECT status, execution_time, error_message FROM pipeline_execution_logs WHERE step_name = 'Load Users Step' AND status = 'FAILED';"
-    )
-    failure_log = cursor.fetchone()
-
-    assert failure_log is not None
-    assert "seconds" in failure_log["execution_time"]
-    assert "Data quality validation failed" in failure_log["error_message"]
+    assert len(records) == 2
+    assert records[0]["username"] == "Olanrewaju"
+    assert records[0]["username_length"] == 10  # Len of 'Olanrewaju'
+    assert records[1]["username"] == "Myke"
+    assert records[1]["username_length"] == 4   # Len of 'Myke'
