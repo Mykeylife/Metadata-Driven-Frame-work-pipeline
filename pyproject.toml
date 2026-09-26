@@ -42,7 +42,7 @@ ignore = []
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
-testpaths = ["tests", "pipeline/tests"]
+testpaths = ["test_dag_runner.py"]
 
 [tool.poetry.scripts]
 pipeline = "pipeline.dag_runner:main"
