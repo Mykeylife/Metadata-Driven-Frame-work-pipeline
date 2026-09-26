@@ -19,7 +19,7 @@ def seed_pipeline_database() -> None:
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
 
-    # Enforce schema existence in case the database is completely empty
+    # 1. Enforce schema existence for core control metadata
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS pipeline_metadata (
             step_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -30,18 +30,34 @@ def seed_pipeline_database() -> None:
         );
     """)
 
+    # 2. Pre-create business data infrastructure staging tables
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS staging_users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT NOT NULL
+        );
+    """)
+
+    # 3. Create the concrete target analytics KPI storage schema
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS analytics_kpis (
+            kpi_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT NOT NULL,
+            username_length INTEGER NOT NULL,
+            processed_at TEXT NOT NULL
+        );
+    """)
+
     print(f"Seeding {len(tasks)} tasks into '{DB_PATH}'...")
     for task in tasks:
-        # Avoid duplicate steps by updating parameters if the step_name already exists
+        # Clear down existing mapping flags cleanly to allow updates on identical rows
+        cursor.execute("DELETE FROM pipeline_metadata WHERE step_name = ?;", (task["step_name"],))
+        
         cursor.execute(
             """
             INSERT INTO pipeline_metadata (step_name, target_table, execution_order, is_active)
-            VALUES (?, ?, ?, ?)
-            ON CONFLICT(step_id) DO UPDATE SET
-                target_table=excluded.target_table,
-                execution_order=excluded.execution_order,
-                is_active=excluded.is_active;
-        """,
+            VALUES (?, ?, ?, ?);
+            """,
             (
                 task["step_name"],
                 task["target_table"],
