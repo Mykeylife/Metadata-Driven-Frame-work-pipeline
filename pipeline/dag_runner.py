@@ -66,20 +66,18 @@ class DAGRunner:
             logger.error(f"Failed to log execution state for step {step_name}: {e}")
 
     def execute_task_logic(self, task: Dict[str, Any]) -> bool:
-        """Executes data operations and validates that target staging tables are populated."""
+        """Executes data operations, processes KPI transformations, or validates table status."""
         target_table = task.get("target_table")
         
         if not target_table:
             logger.error("Task definition is missing an explicit 'target_table' parameter mapping.")
             return False
 
-        logger.info(f"Initiating operational data quality validation gate for table: {target_table}")
-        
         try:
             with self._get_db_connection() as conn:
                 cursor = conn.cursor()
                 
-                # 1. Inspect database metadata schema to see if the table exists
+                # 1. Inspect database metadata schema to see if the target table exists
                 cursor.execute(
                     "SELECT name FROM sqlite_master WHERE type='table' AND name=?;", 
                     (target_table,)
@@ -88,19 +86,47 @@ class DAGRunner:
                     logger.error(f"Quality Gate Breach: Target table '{target_table}' does not exist in schema.")
                     return False
                 
-                # 2. Perform low-overhead conditional lookup to find out if the table is empty
-                cursor.execute(f"SELECT 1 FROM {target_table} LIMIT 1;")
-                if not cursor.fetchone():
-                    logger.error(
-                        f"Quality Gate Breach: Ingestion halted! Staging table '{target_table}' is completely empty."
-                    )
-                    return False
+                # 2. Check if this is our explicit transformation step
+                if target_table == "analytics_kpis":
+                    logger.info("Running real data calculation loop for analytics_kpis...")
                     
-            logger.info(f"Quality validation passed successfully for table: {target_table}")
+                    # Fetch source items from staging_users
+                    cursor.execute("SELECT username FROM staging_users;")
+                    users = cursor.fetchall()
+                    
+                    if not users:
+                        logger.error("Quality Gate Breach: Extraction halted! Source 'staging_users' table has no records.")
+                        return False
+                        
+                    now_str = datetime.now(timezone.utc).isoformat()
+                    
+                    # Compute lengths and populate metrics
+                    for user in users:
+                        username = user["username"]
+                        username_len = len(username)
+                        
+                        cursor.execute(
+                            """
+                            INSERT INTO analytics_kpis (username, username_length, processed_at)
+                            VALUES (?, ?, ?);
+                            """,
+                            (username, username_len, now_str)
+                        )
+                    conn.commit()
+                    logger.info(f"Successfully processed metrics for {len(users)} users inside analytics_kpis.")
+                
+                else:
+                    # 3. For any other staging table, perform low-overhead population validation
+                    logger.info(f"Initiating operational validation gate for staging table: {target_table}")
+                    cursor.execute(f"SELECT 1 FROM {target_table} LIMIT 1;")
+                    if not cursor.fetchone():
+                        logger.error(f"Quality Gate Breach: Ingestion halted! Table '{target_table}' is empty.")
+                        return False
+                    
             return True
             
         except sqlite3.Error as e:
-            logger.error(f"Database error encountered during quality gate inspection on '{target_table}': {e}")
+            logger.error(f"Database error encountered during logic execution on '{target_table}': {e}")
             return False
 
     def run_pipeline(self) -> None:
@@ -135,7 +161,7 @@ class DAGRunner:
 
                 if success:
                     # 4. Handle successful runs and save metrics
-                    self.log_execution(run_id, step_name, "SUCCESS", execution_time=duration_str)
+                    self.log_execution(run_id, run_id if step_name == "GLOBAL_ORCHESTRATOR" else step_name, "SUCCESS", execution_time=duration_str)
                     logger.info(f"Completed successfully: {step_name} in {duration_str}")
                 else:
                     # 5. Handle logical failure states and save metric duration
@@ -154,7 +180,7 @@ class DAGRunner:
             )
             self.log_execution(
                 run_id, "GLOBAL_ORCHESTRATOR", "CRITICAL", execution_time="N/A", error_message=str(global_err)
-            )
+              )
 
 
 if __name__ == "__main__":
