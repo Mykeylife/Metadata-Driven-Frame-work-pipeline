@@ -1,12 +1,15 @@
-[tool.poetry]
+[project]
 name = "metadata-driven-frame-work-pipeline"
-package-mode = false
 version = "0.1.0"
 description = "A metadata-driven pipeline orchestrator with SQLite backing"
-authors = ["Olanrewaju Micheal Akinbode <mykeylife6@gmail.com>"]
+authors = [
+    { name = "Olanrewaju Micheal Akinbode", email = "mykeylife6@gmail.com" }
+]
+requires-python = ">=3.11"
+dependencies = []
 
-[tool.poetry.dependencies]
-python = "^3.11"
+[tool.poetry]
+package-mode = false
 
 [tool.poetry.group.dev.dependencies]
 mypy = "^1.11.0"
@@ -42,5 +45,4 @@ pythonpath = ["."]
 testpaths = ["tests", "pipeline/tests"]
 
 [tool.poetry.scripts]
-# FIX: Map pointing to a module function that can properly initialize the runner class instance
 pipeline = "pipeline.dag_runner:main"
