@@ -32,6 +32,8 @@ def init_db(db_path: str = DEFAULT_DB_PATH):
             step_name TEXT NOT NULL,
             status TEXT NOT NULL,
             execution_time TEXT NOT NULL,
+            peak_memory_kb INTEGER DEFAULT 0,
+            cpu_time_seconds REAL DEFAULT 0.0,
             error_message TEXT
         );
     """)
