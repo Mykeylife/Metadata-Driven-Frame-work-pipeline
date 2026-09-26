@@ -1,5 +1,6 @@
 import json
 import logging
+import resource
 import sqlite3
 import time
 import urllib.request
@@ -82,17 +83,22 @@ class DAGRunner:
         execution_time: str = "N/A",
         error_message: Optional[str] = None,
     ) -> None:
-        """Writes execution logs directly to database telemetry and alerts phone on anomalies."""
+        """Writes execution logs directly to database telemetry and tracks resource biometrics."""
+        usage = resource.getrusage(resource.RUSAGE_SELF)
+        peak_mem = usage.ru_maxrss  # Measured in Kilobytes
+        cpu_time = usage.ru_utime + usage.ru_stime  # User CPU time + System CPU time
+
         insert_query = """
-            INSERT INTO pipeline_execution_logs (run_id, step_name, status, execution_time, error_message)
-            VALUES (?, ?, ?, ?, ?);
+            INSERT INTO pipeline_execution_logs 
+            (run_id, step_name, status, execution_time, peak_memory_kb, cpu_time_seconds, error_message)
+            VALUES (?, ?, ?, ?, ?, ?, ?);
         """
         try:
             with self._get_db_connection() as conn:
                 cursor = conn.cursor()
                 cursor.execute(
                     insert_query,
-                    (run_id, step_name, status, execution_time, error_message),
+                    (run_id, step_name, status, execution_time, peak_mem, cpu_time, error_message),
                 )
                 conn.commit()
             
