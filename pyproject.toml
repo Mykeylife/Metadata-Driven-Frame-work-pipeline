@@ -40,3 +40,7 @@ ignore = []
 [tool.pytest.ini_options]
 pythonpath = ["."]
 testpaths = ["tests", "pipeline/tests"]
+
+[tool.poetry.scripts]
+# FIX: Map pointing to a module function that can properly initialize the runner class instance
+pipeline = "pipeline.dag_runner:main"
