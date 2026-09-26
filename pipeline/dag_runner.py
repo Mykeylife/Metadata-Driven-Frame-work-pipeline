@@ -5,14 +5,18 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
+# FIX: Import the centralized storage path retrieval logic
+from pipeline.config import get_db_path
+
 # Set up logger
 logger = logging.getLogger("pipeline.dag_runner")
 
 
 class DAGRunner:
 
-    def __init__(self, db_path: str = "metadata_control.db"):
-        self.db_path = db_path
+    # FIX: Initialize the class default path dynamically from your config module
+    def __init__(self, db_path: Optional[str] = None):
+        self.db_path = db_path if db_path is not None else get_db_path()
 
     def _get_db_connection(self) -> sqlite3.Connection:
         """Creates and returns a connection to the SQLite simulation metadata store."""
