@@ -1,66 +1,89 @@
-# test_orchestrator.py
-import unittest
 import sqlite3
-from datetime import datetime
+import pytest
 from orchestrator import PipelineOrchestrator, run_pipeline
 from models import PipelineRun, PipelineExecutionError
 
-class TestMetadataPipelineOrchestrator(unittest.TestCase):
-    def setUp(self):
-        # Create an clean in-memory database configuration for isolated test runs
-        self.connection = sqlite3.connect(":memory:")
-        self.orchestrator = PipelineOrchestrator(db_conn=self.connection)
-        
-        # Explicitly build the modern table structures required by the model validations
-        cursor = self.connection.cursor()
-        cursor.execute("""
-            CREATE TABLE pipeline_metadata (
-                pipeline_name TEXT PRIMARY KEY,
-                is_active INTEGER DEFAULT 1
-            )
-        """)
-        cursor.execute("""
-            CREATE TABLE execution_logs (
-                run_id TEXT PRIMARY KEY,
-                pipeline_name TEXT NOT NULL,
-                status TEXT NOT NULL,
-                started_at TEXT NOT NULL,
-                ended_at TEXT
-            )
-        """)
-        self.connection.commit()
 
-    def tearDown(self):
-        self.connection.close()
+@pytest.fixture
+def memory_db_conn():
+    """Provides a clean, isolated in-memory SQLite database setup for orchestrator tests."""
+    conn = sqlite3.connect(":memory:")
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+    
+    # Explicitly build the modern table structures required by the model validations
+    cursor.execute("""
+        CREATE TABLE pipeline_metadata (
+            step_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            step_name TEXT NOT NULL UNIQUE,
+            target_table TEXT NOT NULL,
+            execution_order INTEGER NOT NULL,
+            is_active INTEGER DEFAULT 1
+        );
+    """)
+    cursor.execute("""
+        CREATE TABLE pipeline_execution_logs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            run_id TEXT NOT NULL,
+            step_name TEXT NOT NULL,
+            status TEXT NOT NULL,
+            execution_time TEXT NOT NULL,
+            error_message TEXT
+        );
+    """)
+    # Pre-seed business schemas to satisfy deep execution loops inside DAGRunner dependencies
+    cursor.execute("CREATE TABLE IF NOT EXISTS staging_users (id INTEGER PRIMARY KEY, username TEXT);")
+    cursor.execute("CREATE TABLE IF NOT EXISTS analytics_kpis (kpi_id INTEGER PRIMARY KEY, username TEXT, username_length INTEGER, processed_at TEXT);")
+    cursor.execute("CREATE TABLE IF NOT EXISTS summary_metrics (summary_id INTEGER PRIMARY KEY, metric_name TEXT, metric_value TEXT, calculated_at TEXT);")
+    
+    conn.commit()
+    yield conn
+    conn.close()
 
-    def test_orchestrator_execution(self):
-        # Seed the metadata table correctly
-        cursor = self.connection.cursor()
-        cursor.execute("INSERT INTO pipeline_metadata (pipeline_name, is_active) VALUES (?, 1)", 
-                       ("Metadata-Driven-Pipeline",))
-        self.connection.commit()
 
-        # Run the pipeline test
-        result = self.orchestrator.run_pipeline("run_test_001", "Metadata-Driven-Pipeline")
-        
-        # Verify both data structures are accurately populated
-        self.assertIsInstance(result, PipelineRun)
-        self.assertEqual(result.status, "SUCCESS")
-        self.assertEqual(result.run_id, "run_test_001")
-        
-        # Assert database state validation logic passes properly
-        self.orchestrator.validate_execution_logs("run_test_001")
+def test_orchestrator_execution(memory_db_conn):
+    """Verifies that the orchestrator successfully updates pipeline states and logs footprints."""
+    cursor = memory_db_conn.cursor()
+    # Seed an active metadata task step row mapping tracking configuration
+    cursor.execute("""
+        INSERT INTO pipeline_metadata (step_name, target_table, execution_order, is_active)
+        VALUES ('Extract Users', 'staging_users', 10, 1);
+    """)
+    memory_db_conn.commit()
 
-    def test_inactive_pipeline_throws_error(self):
-        # Seed an explicitly disabled pipeline tracking configuration rule
-        cursor = self.connection.cursor()
-        cursor.execute("INSERT INTO pipeline_metadata (pipeline_name, is_active) VALUES (?, 0)", 
-                       ("Disabled-Pipeline",))
-        self.connection.commit()
+    orchestrator = PipelineOrchestrator(db_conn=memory_db_conn)
 
-        # Assert that our custom typed validation exception triggers correctly
-        with self.assertRaises(PipelineExecutionError):
-            self.orchestrator.run_pipeline("run_test_002", "Disabled-Pipeline")
+    # Run the pipeline test
+    result = orchestrator.run_pipeline("run_test_001", "Main-Pipeline-Orchestration")
+    
+    # Verify both data structures are accurately populated
+    assert isinstance(result, PipelineRun)
+    assert result.status == "SUCCESS"
+    assert result.run_id == "run_test_001"
+    
+    # Assert database state validation logic passes properly
+    orchestrator.validate_execution_logs("run_test_001")
 
-if __name__ == "__main__":
-    unittest.main()
+
+def test_inactive_pipeline_throws_error(memory_db_conn):
+    """Ensures that our custom validation exception triggers correctly if no tasks are active."""
+    orchestrator = PipelineOrchestrator(db_conn=memory_db_conn)
+
+    # Assert that running on an unseeded/inactive configuration triggers our exception barrier
+    with pytest.raises(PipelineExecutionError):
+        orchestrator.run_pipeline("run_test_002", "Disabled-Pipeline")
+
+
+def test_module_level_run_pipeline_helper(memory_db_conn):
+    """Validates that the simple module-level runner function helper acts identically."""
+    cursor = memory_db_conn.cursor()
+    cursor.execute("""
+        INSERT INTO pipeline_metadata (step_name, target_table, execution_order, is_active)
+        VALUES ('Extract Users', 'staging_users', 10, 1);
+    """)
+    memory_db_conn.commit()
+
+    result = run_pipeline(run_id="run_test_003", pipeline_name="Helper-Pipeline", db_conn=memory_db_conn)
+    
+    assert result.status == "SUCCESS"
+    assert result.run_id == "run_test_003"
