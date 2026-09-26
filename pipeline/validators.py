@@ -1,10 +1,13 @@
-import sqlite3
 import logging
-from typing import Dict, Any, Optional
+import re
+import sqlite3
+from typing import Any, Dict, Optional
 
 logger = logging.getLogger("pipeline.validators")
 
+
 class DataQualityValidator:
+
     def __init__(self, db_path: str = "metadata_control.db"):
         self.db_path = db_path
 
@@ -15,8 +18,8 @@ class DataQualityValidator:
         return conn
 
     def check_row_count(self, table_name: str, min_expected: int = 1) -> bool:
-        """
-        Gating Rule 1: Checks if a table has at least the minimum required records.
+        """Gating Rule 1: Checks if a table has at least the minimum required records.
+
         Fails if the table is completely empty or falls below the threshold.
         """
         query = f"SELECT COUNT(*) FROM {table_name};"
@@ -37,8 +40,8 @@ class DataQualityValidator:
             return False
 
     def check_null_threshold(self, table_name: str, column_name: str, max_allowed_pct: float = 0.0) -> bool:
-        """
-        Gating Rule 2: Verifies that critical primary/foreign key columns do not exceed 
+        """Gating Rule 2: Verifies that critical primary/foreign key columns do not exceed
+
         the maximum allowable percentage of NULL records.
         """
         query = f"""
@@ -71,9 +74,33 @@ class DataQualityValidator:
             logger.error(f"Quality Gating Failed: Column evaluation failed on {table_name}.{column_name}: {e}")
             return False
 
-    def validate_step(self, task: Dict[str, Any]) -> bool:
+    def check_syntax_constraints(self, table_name: str, column_name: str) -> bool:
+        """Gating Rule 3: Validates that strings inside character columns adhere to clean
+
+        alphanumeric, underscore, or hyphen constraints (3-20 characters).
         """
-        Orchestrates all applicable data quality validations for a specific table step.
+        query = f"SELECT {column_name} FROM {table_name};"
+        try:
+            with self._get_db_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(query)
+                rows = cursor.fetchall()
+                
+                for row in rows:
+                    val = row[column_name]
+                    if not val or not re.match(r"^[a-zA-Z0-9_\-]{3,20}$", str(val)):
+                        logger.error(f"Quality Breach [Syntax Check]: Value '{val}' in {table_name}.{column_name} is invalid.")
+                        return False
+                        
+                logger.info(f"Quality Pass [Syntax Check]: All records in {table_name}.{column_name} conform to syntax filters.")
+                return True
+        except sqlite3.OperationalError as e:
+            logger.error(f"Quality Gating Failed: Syntax verification skipped on {table_name}.{column_name}: {e}")
+            return False
+
+    def validate_step(self, task: Dict[str, Any]) -> bool:
+        """Orchestrates all applicable data quality validations for a specific table step.
+
         Returns False immediately if any metric fails, acting as a strict operational gate.
         """
         target_table = task.get("target_table")
@@ -87,9 +114,21 @@ class DataQualityValidator:
         if not self.check_row_count(target_table, min_expected=1):
             return False
             
+        # Determine the correct primary key column names to evaluate dynamically
+        primary_key_map = {
+            "staging_users": "id",
+            "analytics_kpis": "kpi_id",
+            "summary_metrics": "summary_id"
+        }
+        pk_column = primary_key_map.get(target_table, "id")
+
         # Rule 2: Primary ID null verification (Strict 0% tolerance for null keys)
-        # Note: You can expand this to look up critical fields dynamically from a schema map
-        if not self.check_null_threshold(target_table, column_name="id", max_allowed_pct=0.0):
+        if not self.check_null_threshold(target_table, column_name=pk_column, max_allowed_pct=0.0):
             return False
             
+        # Rule 3: Run targeted syntax character regex pattern matching on source data
+        if target_table == "staging_users":
+            if not self.check_syntax_constraints(target_table, column_name="username"):
+                return False
+                
         return True
