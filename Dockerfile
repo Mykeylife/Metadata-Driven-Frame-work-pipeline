@@ -31,6 +31,12 @@ RUN poetry install --no-interaction --no-ansi --no-root
 COPY pipeline/ ./pipeline/
 COPY init_simulation_db.py orchestrator.py models.py ./
 
+# Create persistent directories to protect local log files and database state traces
+RUN mkdir -p /app/logs
+
+# Declare mount volumes mapping boundaries for external state persistence
+VOLUME ["/app/logs"]
+
 # Expose an environmental port placeholder if needed for future API endpoints
 EXPOSE 8080
 
