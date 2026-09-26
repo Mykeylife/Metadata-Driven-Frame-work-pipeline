@@ -28,9 +28,11 @@ jobs:
         poetry lock
         poetry install --no-root --no-interaction
 
+    - name: Run Database Seeder Check
+      run: python seed_metadata.py
+
     - name: Static type check with Mypy
       run: mypy --explicit-package-bases pipeline tests || true
 
     - name: Run tests with code coverage
-      run: |
-        env PYTHONPATH=. pytest --cov=pipeline --cov-report=term-missing || true
+      run: env PYTHONPATH=. pytest --cov=pipeline --cov-report=term-missing || true
