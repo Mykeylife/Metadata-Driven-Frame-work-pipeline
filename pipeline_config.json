@@ -10,5 +10,11 @@
     "target_table": "analytics_kpis",
     "execution_order": 2,
     "is_active": 1
+  },
+  {
+    "step_name": "Aggregate Analytics Metrics",
+    "target_table": "summary_metrics",
+    "execution_order": 3,
+    "is_active": 1
   }
 ]
