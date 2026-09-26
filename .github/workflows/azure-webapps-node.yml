@@ -22,19 +22,22 @@ jobs:
     - name: Install Poetry
       run: pip install poetry
 
-    - name: Regenerate Lock File and Install Dependencies
+    - name: Verify Lock File Consistency
+      run: poetry check
+
+    - name: Install Dependencies from Lockfile
       run: |
         poetry config virtualenvs.create false
-        poetry lock
-        poetry install --no-root --no-interaction
+        poetry install --no-root --no-interaction --sync
 
     - name: Run Database Seeder Check
       run: python seed_metadata.py
 
     - name: Lint with ruff and black
       run: |
-        poetry run ruff check .
-        poetry run black --check .
+        pip install ruff black
+        ruff check .
+        black --check .
 
     - name: Static type check with Mypy
       run: mypy --explicit-package-bases pipeline tests
