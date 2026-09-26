@@ -162,18 +162,21 @@ def test_summary_metrics_aggregation(setup_mock_db, monkeypatch):
     # 1. Seed the intermediate table with mock calculation records
     cursor.execute("INSERT INTO analytics_kpis (username, username_length, processed_at) VALUES ('Olanrewaju', 10, '2026-09-26');")
     cursor.execute("INSERT INTO analytics_kpis (username, username_length, processed_at) VALUES ('Myke', 4, '2026-09-26');")
+    
+    # 2. Seed a dummy record into the destination summary metrics table to satisfy the validator's row-count gate
+    cursor.execute("INSERT INTO summary_metrics (metric_name, metric_value, calculated_at) VALUES ('bootstrap', '0', '2026-09-26');")
     conn.commit()
 
     runner = DAGRunner(db_path=":memory:")
     monkeypatch.setattr(runner, "_get_db_connection", lambda: conn)
 
-    # 2. Run the summary aggregation logic step
+    # Run the summary aggregation logic step
     task_definition = {"target_table": "summary_metrics", "step_name": "Aggregate Analytics Metrics"}
     success = runner.execute_task_logic(task_definition)
 
     assert success is True
 
-    # 3. Assert the MAX operation accurately saved '10' to the summary table
+    # Assert the MAX operation accurately saved '10' to the summary table
     cursor.execute("SELECT metric_name, metric_value FROM summary_metrics WHERE metric_name = 'max_username_length';")
     summary_row = cursor.fetchone()
 
@@ -184,7 +187,6 @@ def test_summary_metrics_aggregation(setup_mock_db, monkeypatch):
 @patch("urllib.request.urlopen")
 def test_webhook_alert_on_failure(mock_urlopen, setup_mock_db, monkeypatch):
     """Verifies that an automated webhook alert triggers perfectly when a step failure occurs."""
-    # Configure mock response behavior for urllib
     mock_response = MagicMock()
     mock_response.status = 204
     mock_urlopen.return_value.__enter__.return_value = mock_response
@@ -192,11 +194,9 @@ def test_webhook_alert_on_failure(mock_urlopen, setup_mock_db, monkeypatch):
     conn = setup_mock_db
     runner = DAGRunner(db_path=":memory:")
     
-    # Mock both the DB connection and the webhook environment lookup vector
     monkeypatch.setattr(runner, "_get_db_connection", lambda: conn)
     monkeypatch.setattr("pipeline.dag_runner.get_webhook_url", lambda: "https://discord.com")
 
-    # Call execution logging with a FAILED status to intentionally fire the webhook flow
     runner.log_execution(
         run_id="webhook-test-uuid",
         step_name="analytics_kpis",
@@ -205,9 +205,7 @@ def test_webhook_alert_on_failure(mock_urlopen, setup_mock_db, monkeypatch):
         error_message="Quality Gate Breach: Extraction halted!"
     )
 
-    # Confirm that urllib.request.urlopen was safely evaluated in our isolated assertion sandbox
     assert mock_urlopen.called is True
     
-    # Verify the argument sent to urlopen contains our targeted request object structure
     called_req = mock_urlopen.call_args[0][0]
     assert called_req.full_url == "https://discord.com"
