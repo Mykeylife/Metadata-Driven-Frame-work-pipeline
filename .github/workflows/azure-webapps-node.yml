@@ -39,12 +39,11 @@ jobs:
     - name: Auto-Format and Lint Codebase
       run: |
         pip install ruff black
-        ruff check . --fix || true
+        ruff check . --fix
         black .
 
     - name: Static type check with Mypy
-      run: mypy --config-file mypy.ini --explicit-package-bases pipeline tests || true
+      run: mypy --config-file mypy.ini --explicit-package-bases pipeline tests
 
     - name: Run tests with code coverage
-      # FIX: Tells pytest to look for the file directly in the root directory and fallback cleanly
-      run: env PYTHONPATH=. pytest test_dag_runner.py --cov=pipeline --cov-report=term-missing || true
+      run: env PYTHONPATH=. pytest test_dag_runner.py --cov=pipeline --cov-report=term-missing
