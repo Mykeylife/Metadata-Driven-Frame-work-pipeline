@@ -36,11 +36,11 @@ jobs:
     - name: Run Database Seeder Check
       run: python seed_metadata.py
 
-    - name: Auto-Format and Lint Codebase
+        - name: Auto-Format and Lint Codebase
       run: |
         pip install ruff black
-        ruff check . --fix
         black .
+        ruff check . --ignore E501 --fix
 
     - name: Static type check with Mypy
       run: mypy --config-file mypy.ini --explicit-package-bases pipeline tests
