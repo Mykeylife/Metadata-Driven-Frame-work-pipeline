@@ -19,3 +19,42 @@ Use code with caution.Formatting and Syntax ComplianceCheck line constraints and
 poetry run flake8 .
 5. Deployment Options (Docker Containerization)For self-contained container deployments, compile and run the engine using the localized production configuration layout:bashdocker build -t metadata-orchestrator .
 docker run --rm --env PIPELINE_WEBHOOK_URL=$PIPELINE_WEBHOOK_URL metadata-orchestrator
+## 🚀 Quick Start & Usage Examples
+
+### 1. Initialize and Seed the Metadata Database
+Before running the orchestrator, you must provision the SQLite infrastructure tables and seed them with your pipeline configurations:
+
+```bash
+poetry run init-db
+```
+
+### 2. Programmatic Pipeline Execution
+You can invoke the metadata-driven orchestrator directly within your Python applications to manage task execution pipelines:
+
+```python
+import sqlite3
+from pipeline.config import get_db_path
+
+DB_PATH = get_db_path()
+
+def verify_pipeline_state():
+    """Validates that control metadata tables are structured correctly."""
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    
+    # Query current active tasks tracked by metadata
+    cursor.execute("SELECT step_name, target_table FROM pipeline_metadata WHERE is_active = 1;")
+    active_tasks = cursor.fetchall()
+    
+    print(f"Loaded {len(active_tasks)} active production data pipeline tasks:")
+    for task in active_tasks:
+        print(f" - Task: {task[0]} -> Destination: {task[1]}")
+        
+    conn.close()
+
+if __name__ == "__main__":
+    verify_pipeline_state()
+```
+
+## 📄 License
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
