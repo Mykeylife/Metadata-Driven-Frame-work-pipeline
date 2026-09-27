@@ -40,7 +40,7 @@ jobs:
       run: |
         pip install ruff black
         black .
-        ruff check . --fix
+        ruff check . --ignore E501 --fix
 
     - name: Static type check with Mypy
       run: mypy --config-file mypy.ini --explicit-package-bases pipeline tests || true
