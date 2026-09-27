@@ -58,8 +58,9 @@ def seed_pipeline_database() -> None:
     cursor = conn.cursor()
 
     # FIX (Item 5): Natively iterate through centralized definitions to provision tables cleanly
+    # CHANGED: table_name to _table_name to resolve the B007 unused loop variable linter error
     print("Enforcing centralized infrastructure database schemas...")
-    for table_name, schema_ddl in TABLE_SCHEMAS.items():
+    for _table_name, schema_ddl in TABLE_SCHEMAS.items():
         cursor.execute(schema_ddl)
 
     print(f"Seeding {len(tasks)} tasks into '{DB_PATH}'...")
