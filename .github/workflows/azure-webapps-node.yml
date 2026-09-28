@@ -13,8 +13,6 @@ jobs:
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
-      with:
-        token: ${{ secrets.GITHUB_TOKEN }}
 
     - name: Set up Python 3.11
       uses: actions/setup-python@v5
@@ -24,26 +22,20 @@ jobs:
     - name: Install Poetry
       run: pip install poetry
 
-    - name: Automatically Repair and Sync Lockfile
-      run: |
-        poetry lock
-
-    - name: Install Dependencies from Lockfile
+    - name: Configure Poetry and Install Dependencies
       run: |
         poetry config virtualenvs.create false
+        poetry lock
         poetry install --no-root --no-interaction
 
-    - name: Run Database Seeder Check
-      run: python seed_metadata.py
+    - name: Check Code Formatting (Black)
+      run: black --check pipeline tests
 
-    - name: Auto-Format and Lint Codebase
-      run: |
-        pip install ruff black
-        black .
-        ruff check . --ignore E501 --fix
+    - name: Lint Codebase (Ruff)
+      run: ruff check pipeline tests
 
-    - name: Static type check with Mypy
-      run: mypy --config-file mypy.ini --explicit-package-bases pipeline tests || true
+    - name: Static Type Validation (Mypy)
+      run: mypy pipeline tests
 
-    - name: Run tests with code coverage
-      run: env PYTHONPATH=. pytest test_dag_runner.py --cov=pipeline --cov-report=term-missing || true
+    - name: Run Tests with Strict Coverage
+      run: env PYTHONPATH=. pytest --cov=pipeline --cov-report=term-missing --cov-fail-under=60
