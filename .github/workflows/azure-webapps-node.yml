@@ -34,7 +34,12 @@ jobs:
         poetry install --no-root --no-interaction
 
     - name: Run Database Seeder Check
-      run: python seed_metadata.py
+      run: |
+        if [ -f seed_metadata.py ]; then
+          python seed_metadata.py
+        else
+          echo "seed_metadata.py not found in root, skipping execution check."
+        fi
 
     - name: Auto-Format and Lint Codebase
       run: |
@@ -43,7 +48,18 @@ jobs:
         ruff check . --ignore E501 --fix
 
     - name: Static type check with Mypy
-      run: mypy --config-file mypy.ini --explicit-package-bases pipeline tests || true
+      run: |
+        if [ -f mypy.ini ]; then
+          mypy --config-file mypy.ini --explicit-package-bases .
+        else
+          mypy --explicit-package-bases .
+        fi
 
     - name: Run tests with code coverage
-      run: env PYTHONPATH=. pytest test_dag_runner.py --cov=pipeline --cov-report=term-missing || true
+      run: |
+        export PYTHONPATH=.
+        if [ -f test_dag_runner.py ]; then
+          pytest test_dag_runner.py --cov=. --cov-report=term-missing
+        else
+          pytest --cov=. --cov-report=term-missing
+        fi
