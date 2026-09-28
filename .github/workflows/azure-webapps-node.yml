@@ -43,7 +43,7 @@ jobs:
         ruff check . --ignore E501 --fix
 
     - name: Static type check with Mypy
-      run: mypy --config-file mypy.ini --explicit-package-bases pipeline tests || true
+      run: mypy --config-file mypy.ini --explicit-package-bases pipeline tests
 
     - name: Run tests with code coverage
-      run: env PYTHONPATH=. pytest test_dag_runner.py --cov=pipeline --cov-report=term-missing || true
+      run: env PYTHONPATH=. pytest test_dag_runner.py --cov=pipeline --cov-report=term-missing
