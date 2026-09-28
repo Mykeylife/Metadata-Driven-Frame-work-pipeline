@@ -1,14 +1,20 @@
 import json
+import logging
 import os
 import sqlite3
-
-# FIX (Item 3): Import the centralized database path configuration logic
 from pipeline.config import get_db_path
+
+# Configure structured production-ready terminal logging framework
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    handlers=[logging.StreamHandler()]
+)
+logger = logging.getLogger("metadata_seeder")
 
 DB_PATH = get_db_path()
 CONFIG_PATH = "pipeline_config.json"
 
-# FIX (Item 5): Centralize SQL structural DDL schemas into a single dictionary
 TABLE_SCHEMAS = {
     "pipeline_metadata": """
         CREATE TABLE IF NOT EXISTS pipeline_metadata (
@@ -43,30 +49,26 @@ TABLE_SCHEMAS = {
     """
 }
 
-
 def seed_pipeline_database() -> None:
     """Reads configuration rules from a JSON file and seeds the SQLite control tables."""
     if not os.path.exists(CONFIG_PATH):
-        print(f"Error: Configuration file '{CONFIG_PATH}' not found.")
+        logger.error("Configuration file '%s' not found.", CONFIG_PATH)
         return
 
-    print(f"Reading pipeline configurations from '{CONFIG_PATH}'...")
+    logger.info("Reading pipeline configurations from '%s'...", CONFIG_PATH)
     with open(CONFIG_PATH, "r") as f:
         tasks = json.load(f)
 
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
 
-    # FIX (Item 5): Natively iterate through centralized definitions to provision tables cleanly
-    # CHANGED: table_name to _table_name to resolve the B007 unused loop variable linter error
-    print("Enforcing centralized infrastructure database schemas...")
+    logger.info("Enforcing centralized infrastructure database schemas...")
     for _table_name, schema_ddl in TABLE_SCHEMAS.items():
         cursor.execute(schema_ddl)
 
-    print(f"Seeding {len(tasks)} tasks into '{DB_PATH}'...")
+    logger.info("Seeding %d tasks into '%s'...", len(tasks), DB_PATH)
     for task in tasks:
         cursor.execute("DELETE FROM pipeline_metadata WHERE step_name = ?;", (task["step_name"],))
-        
         cursor.execute(
             """
             INSERT INTO pipeline_metadata (step_name, target_table, execution_order, is_active)
@@ -82,8 +84,7 @@ def seed_pipeline_database() -> None:
 
     conn.commit()
     conn.close()
-    print("Database seeding completed successfully! ✅")
-
+    logger.info("Database seeding completed successfully! ✅")
 
 if __name__ == "__main__":
     seed_pipeline_database()
