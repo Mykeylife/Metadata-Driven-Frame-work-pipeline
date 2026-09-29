@@ -1,7 +1,7 @@
 import logging
 import re
 import sqlite3
-from typing import Any, Dict
+from typing import Any
 
 logger = logging.getLogger("pipeline.validators")
 
@@ -104,7 +104,7 @@ class DataQualityValidator:
                 cursor = conn.cursor()
                 cursor.execute(query)
                 row_count = cursor.fetchone()[0]
-                
+
                 if row_count >= min_expected:
                     logger.info(
                         f"Quality Pass [Row Count]: {table_name} has {row_count} rows "
@@ -118,7 +118,9 @@ class DataQualityValidator:
                     )
                     return False
         except sqlite3.OperationalError as e:
-            logger.error(f"Quality Gating Failed: Table '{table_name}' inaccessible: {e}")
+            logger.error(
+                f"Quality Gating Failed: Table '{table_name}' inaccessible: {e}"
+            )
             return False
 
     def check_null_threshold(
@@ -136,17 +138,17 @@ class DataQualityValidator:
                 cursor = conn.cursor()
                 cursor.execute(query)
                 row = cursor.fetchone()
-                
+
                 total_rows = row["total_rows"]
                 null_rows = row["null_rows"] if row["null_rows"] is not None else 0
-                
+
                 if total_rows == 0:
                     logger.warning(
                         f"Quality Warning [Null Check]: {table_name} is empty. "
                         f"Skipping evaluation."
                     )
                     return True
-                
+
                 null_pct = (null_rows / total_rows) * 100.0
                 if null_pct <= max_allowed_pct:
                     logger.info(
@@ -161,7 +163,9 @@ class DataQualityValidator:
                     )
                     return False
         except sqlite3.OperationalError as e:
-            logger.error(f"Quality Gating Failed: Evaluation failed on {table_name}: {e}")
+            logger.error(
+                f"Quality Gating Failed: Evaluation failed on {table_name}: {e}"
+            )
             return False
 
     def check_syntax_constraints(self, table_name: str, column_name: str) -> bool:
@@ -175,7 +179,7 @@ class DataQualityValidator:
                 cursor = conn.cursor()
                 cursor.execute(query)
                 rows = cursor.fetchall()
-                
+
                 for row in rows:
                     val = row[column_name]
                     if not val or not re.match(r"^[a-zA-Z0-9_\-]{3,20}$", str(val)):
@@ -184,7 +188,7 @@ class DataQualityValidator:
                             f"{table_name}.{column_name} is invalid."
                         )
                         return False
-                        
+
                 logger.info(
                     f"Quality Pass [Syntax Check]: All records in "
                     f"{table_name}.{column_name} conform to syntax filters."
@@ -194,15 +198,15 @@ class DataQualityValidator:
             logger.error(f"Gating Failed: Syntax check skipped on {table_name}: {e}")
             return False
 
-    def validate_step(self, task: Dict[str, Any]) -> bool:
+    def validate_step(self, task: dict[str, Any]) -> bool:
         """Orchestrates all applicable data quality validations for a specific table step."""
         target_table = task.get("target_table")
         if not target_table:
             logger.error("Validation bypassed: No target table specified.")
             return False
-            
+
         logger.info(f"Running data quality rules for table: {target_table}")
-        
+
         # Rule 0: Atomic schema structure alignment validation
         if not self.check_schema_alignment(target_table):
             return False
@@ -210,7 +214,7 @@ class DataQualityValidator:
         # Rule 1: Row count validation (requires at least 1 record post-load)
         if not self.check_row_count(target_table, min_expected=1):
             return False
-            
+
         primary_key_map = {
             "staging_users": "id",
             "analytics_kpis": "kpi_id",
@@ -223,10 +227,10 @@ class DataQualityValidator:
             target_table, column_name=pk_column, max_allowed_pct=0.0
         ):
             return False
-            
+
         # Rule 3: Run targeted syntax character regex pattern matching on source data
         if target_table == "staging_users":
             if not self.check_syntax_constraints(target_table, column_name="username"):
                 return False
-                
+
         return True
