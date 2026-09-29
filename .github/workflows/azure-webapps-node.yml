@@ -21,29 +21,52 @@ jobs:
       with:
         python-version: '3.11'
 
-    - name: Install Poetry
-      run: pip install poetry
-
-    - name: Automatically Repair and Sync Lockfile
+    - name: Install Development Tools
       run: |
-        poetry lock
+        python -m pip install --upgrade pip
+        pip install poetry ruff black mypy pytest pytest-cov pydantic
 
-    - name: Install Dependencies from Lockfile
+    - name: Setup Project Environment
       run: |
-        poetry config virtualenvs.create false
-        poetry install --no-root --no-interaction
+        if [ -f pyproject.toml ]; then
+          poetry config virtualenvs.create false
+          poetry lock
+          poetry install --no-root --no-interaction
+        else
+          echo "No pyproject.toml found, proceeding with global pip context."
+        fi
 
     - name: Run Database Seeder Check
-      run: python seed_metadata.py
-
-    - name: Auto-Format and Lint Codebase
       run: |
-        pip install ruff black
-        black .
-        ruff check . --ignore E501 --fix
+        if [ -f seed_metadata.py ]; then
+          python seed_metadata.py
+        elif [ -f pipeline/seed_metadata.py ]; then
+          python pipeline/seed_metadata.py
+        else
+          echo "seed_metadata.py not found, skipping seeder validation."
+        fi
 
-    - name: Static type check with Mypy
-      run: mypy --config-file mypy.ini --explicit-package-bases pipeline tests || true
+    - name: Strict Code Format Check (Black)
+      run: black --check .
 
-    - name: Run tests with code coverage
-      run: env PYTHONPATH=. pytest test_dag_runner.py --cov=pipeline --cov-report=term-missing || true
+    - name: Strict Code Lint Check (Ruff)
+      run: ruff check . --ignore E501
+
+    - name: Strict Static Type Check (Mypy)
+      run: |
+        if [ -d pipeline ]; then
+          mypy --explicit-package-bases pipeline
+        else
+          mypy --explicit-package-bases .
+        fi
+
+    - name: Run Strict Unit Tests with Coverage
+      run: |
+        export PYTHONPATH=$GITHUB_WORKSPACE
+        if [ -f test_dag_runner.py ]; then
+          pytest test_dag_runner.py --cov=. --cov-report=term-missing
+        elif [ -f tests/test_dag_runner.py ]; then
+          pytest tests/test_dag_runner.py --cov=. --cov-report=term-missing
+        else
+          pytest --cov=. --cov-report=term-missing
+        fi
