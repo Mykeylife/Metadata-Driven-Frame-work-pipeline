@@ -2,13 +2,14 @@ import json
 import logging
 import os
 import sqlite3
+
 from pipeline.config import get_db_path
 
 # Configure structured production-ready terminal logging framework
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s",
-    handlers=[logging.StreamHandler()]
+    handlers=[logging.StreamHandler()],
 )
 logger = logging.getLogger("metadata_seeder")
 
@@ -46,8 +47,9 @@ TABLE_SCHEMAS = {
             metric_value TEXT NOT NULL,
             calculated_at TEXT NOT NULL
         );
-    """
+    """,
 }
+
 
 def seed_pipeline_database() -> None:
     """Reads configuration rules from a JSON file and seeds the SQLite control tables."""
@@ -56,7 +58,7 @@ def seed_pipeline_database() -> None:
         return
 
     logger.info("Reading pipeline configurations from '%s'...", CONFIG_PATH)
-    with open(CONFIG_PATH, "r") as f:
+    with open(CONFIG_PATH) as f:
         tasks = json.load(f)
 
     conn = sqlite3.connect(DB_PATH)
@@ -68,7 +70,9 @@ def seed_pipeline_database() -> None:
 
     logger.info("Seeding %d tasks into '%s'...", len(tasks), DB_PATH)
     for task in tasks:
-        cursor.execute("DELETE FROM pipeline_metadata WHERE step_name = ?;", (task["step_name"],))
+        cursor.execute(
+            "DELETE FROM pipeline_metadata WHERE step_name = ?;", (task["step_name"],)
+        )
         cursor.execute(
             """
             INSERT INTO pipeline_metadata (step_name, target_table, execution_order, is_active)
@@ -85,6 +89,7 @@ def seed_pipeline_database() -> None:
     conn.commit()
     conn.close()
     logger.info("Database seeding completed successfully! ✅")
+
 
 if __name__ == "__main__":
     seed_pipeline_database()
