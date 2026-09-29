@@ -1,7 +1,9 @@
 import sqlite3
+
 import pytest
+
+from models import PipelineExecutionError, PipelineRun
 from orchestrator import PipelineOrchestrator, run_pipeline
-from models import PipelineRun, PipelineExecutionError
 
 
 @pytest.fixture
@@ -10,7 +12,7 @@ def memory_db_conn():
     conn = sqlite3.connect(":memory:")
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
-    
+
     # Explicitly build the modern table structures required by the model validations
     cursor.execute("""
         CREATE TABLE pipeline_metadata (
@@ -32,10 +34,16 @@ def memory_db_conn():
         );
     """)
     # Pre-seed business schemas to satisfy deep execution loops inside DAGRunner dependencies
-    cursor.execute("CREATE TABLE IF NOT EXISTS staging_users (id INTEGER PRIMARY KEY, username TEXT);")
-    cursor.execute("CREATE TABLE IF NOT EXISTS analytics_kpis (kpi_id INTEGER PRIMARY KEY, username TEXT, username_length INTEGER, processed_at TEXT);")
-    cursor.execute("CREATE TABLE IF NOT EXISTS summary_metrics (summary_id INTEGER PRIMARY KEY, metric_name TEXT, metric_value TEXT, calculated_at TEXT);")
-    
+    cursor.execute(
+        "CREATE TABLE IF NOT EXISTS staging_users (id INTEGER PRIMARY KEY, username TEXT);"
+    )
+    cursor.execute(
+        "CREATE TABLE IF NOT EXISTS analytics_kpis (kpi_id INTEGER PRIMARY KEY, username TEXT, username_length INTEGER, processed_at TEXT);"
+    )
+    cursor.execute(
+        "CREATE TABLE IF NOT EXISTS summary_metrics (summary_id INTEGER PRIMARY KEY, metric_name TEXT, metric_value TEXT, calculated_at TEXT);"
+    )
+
     conn.commit()
     yield conn
     conn.close()
@@ -55,12 +63,12 @@ def test_orchestrator_execution(memory_db_conn):
 
     # Run the pipeline test
     result = orchestrator.run_pipeline("run_test_001", "Main-Pipeline-Orchestration")
-    
+
     # Verify both data structures are accurately populated
     assert isinstance(result, PipelineRun)
     assert result.status == "SUCCESS"
     assert result.run_id == "run_test_001"
-    
+
     # Assert database state validation logic passes properly
     orchestrator.validate_execution_logs("run_test_001")
 
@@ -83,7 +91,9 @@ def test_module_level_run_pipeline_helper(memory_db_conn):
     """)
     memory_db_conn.commit()
 
-    result = run_pipeline(run_id="run_test_003", pipeline_name="Helper-Pipeline", db_conn=memory_db_conn)
-    
+    result = run_pipeline(
+        run_id="run_test_003", pipeline_name="Helper-Pipeline", db_conn=memory_db_conn
+    )
+
     assert result.status == "SUCCESS"
     assert result.run_id == "run_test_003"
