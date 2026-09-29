@@ -142,20 +142,25 @@ def test_real_kpi_transformation_loop(setup_mock_db, monkeypatch):
     monkeypatch.setattr(runner, "_get_db_connection", lambda: conn)
 
     # Fire live calculation processing layer for target schema
-    task_definition = {"target_table": "analytics_kpis", "step_name": "Transform Metric KPIs"}
+    task_definition = {
+        "target_table": "analytics_kpis",
+        "step_name": "Transform Metric KPIs",
+    }
     success = runner.execute_task_logic(task_definition)
 
     assert success is True
 
     # Validate string measurement calculations are natively accurate
-    cursor.execute("SELECT username, username_length FROM analytics_kpis ORDER BY username_length DESC;")
+    cursor.execute(
+        "SELECT username, username_length FROM analytics_kpis ORDER BY username_length DESC;"
+    )
     records = cursor.fetchall()
 
     assert len(records) == 2
     assert records[0]["username"] == "Olanrewaju"
     assert records[0]["username_length"] == 10  # Len of 'Olanrewaju'
     assert records[1]["username"] == "Myke"
-    assert records[1]["username_length"] == 4   # Len of 'Myke'
+    assert records[1]["username_length"] == 4  # Len of 'Myke'
 
 
 def test_summary_metrics_aggregation(setup_mock_db, monkeypatch):
@@ -164,24 +169,35 @@ def test_summary_metrics_aggregation(setup_mock_db, monkeypatch):
     cursor = conn.cursor()
 
     # 1. Seed the intermediate table with mock calculation records
-    cursor.execute("INSERT INTO analytics_kpis (username, username_length, processed_at) VALUES ('Olanrewaju', 10, '2026-09-26');")
-    cursor.execute("INSERT INTO analytics_kpis (username, username_length, processed_at) VALUES ('Myke', 4, '2026-09-26');")
-    
+    cursor.execute(
+        "INSERT INTO analytics_kpis (username, username_length, processed_at) VALUES ('Olanrewaju', 10, '2026-09-26');"
+    )
+    cursor.execute(
+        "INSERT INTO analytics_kpis (username, username_length, processed_at) VALUES ('Myke', 4, '2026-09-26');"
+    )
+
     # 2. Seed a dummy record into the destination summary metrics table to satisfy the validator's row-count gate
-    cursor.execute("INSERT INTO summary_metrics (metric_name, metric_value, calculated_at) VALUES ('bootstrap', '0', '2026-09-26');")
+    cursor.execute(
+        "INSERT INTO summary_metrics (metric_name, metric_value, calculated_at) VALUES ('bootstrap', '0', '2026-09-26');"
+    )
     conn.commit()
 
     runner = DAGRunner(db_path=":memory:")
     monkeypatch.setattr(runner, "_get_db_connection", lambda: conn)
 
     # Run the summary aggregation logic step
-    task_definition = {"target_table": "summary_metrics", "step_name": "Aggregate Analytics Metrics"}
+    task_definition = {
+        "target_table": "summary_metrics",
+        "step_name": "Aggregate Analytics Metrics",
+    }
     success = runner.execute_task_logic(task_definition)
 
     assert success is True
 
     # Assert the MAX operation accurately saved '10' to the summary table
-    cursor.execute("SELECT metric_name, metric_value FROM summary_metrics WHERE metric_name = 'max_username_length';")
+    cursor.execute(
+        "SELECT metric_name, metric_value FROM summary_metrics WHERE metric_name = 'max_username_length';"
+    )
     summary_row = cursor.fetchone()
 
     assert summary_row is not None
@@ -197,19 +213,21 @@ def test_webhook_alert_on_failure(mock_urlopen, setup_mock_db, monkeypatch):
 
     conn = setup_mock_db
     runner = DAGRunner(db_path=":memory:")
-    
+
     monkeypatch.setattr(runner, "_get_db_connection", lambda: conn)
-    monkeypatch.setattr("pipeline.dag_runner.get_webhook_url", lambda: "https://discord.com")
+    monkeypatch.setattr(
+        "pipeline.dag_runner.get_webhook_url", lambda: "https://discord.com"
+    )
 
     runner.log_execution(
         run_id="webhook-test-uuid",
         step_name="analytics_kpis",
         status="FAILED",
         execution_time="1.2s",
-        error_message="Quality Gate Breach: Extraction halted!"
+        error_message="Quality Gate Breach: Extraction halted!",
     )
 
     assert mock_urlopen.called is True
-    
+
     called_req = mock_urlopen.call_args[0][0]
     assert called_req.full_url == "https://discord.com"
