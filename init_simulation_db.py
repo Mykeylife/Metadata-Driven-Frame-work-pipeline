@@ -1,4 +1,3 @@
-import os
 import sqlite3
 
 # Align directly with the DEFAULT_DB_PATH constant in pipeline/config.py
@@ -74,21 +73,29 @@ def init_db(db_path: str = DEFAULT_DB_PATH):
         ("Compile Reporting Summary Metrics", "summary_metrics", 30),
     ]
     for step_name, target_table, execution_order in tasks_to_seed:
-        cursor.execute("""
+        cursor.execute(
+            """
             INSERT OR IGNORE INTO pipeline_metadata (step_name, target_table, execution_order, is_active)
             VALUES (?, ?, ?, 1);
-        """, (step_name, target_table, execution_order))
+        """,
+            (step_name, target_table, execution_order),
+        )
 
     # --- BUSINESS WORKSPACE RECORDS SEEDING ---
     print("Injecting initial staging profiles to fulfill processing gates...")
     sample_users = [("Olanrewaju",), ("Myke",), ("PipelineDev",)]
-    cursor.executemany("""
+    cursor.executemany(
+        """
         INSERT OR IGNORE INTO staging_users (username) VALUES (?);
-    """, sample_users)
+    """,
+        sample_users,
+    )
 
     conn.commit()
     conn.close()
-    print("Database environment completely provisioned and ready for pipeline activation!")
+    print(
+        "Database environment completely provisioned and ready for pipeline activation!"
+    )
 
 
 if __name__ == "__main__":
