@@ -5,8 +5,8 @@ import sqlite3
 import time
 import urllib.request
 import uuid
-from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from datetime import UTC, datetime
+from typing import Any
 
 # Import centralized configuration parameters and validators
 from pipeline.config import get_db_path, get_webhook_url
@@ -18,7 +18,7 @@ logger = logging.getLogger("pipeline.dag_runner")
 
 class DAGRunner:
 
-    def __init__(self, db_path: Optional[str] = None):
+    def __init__(self, db_path: str | None = None):
         self.db_path = db_path if db_path is not None else get_db_path()
         # Initialize our automated quality gating engine
         self.validator = DataQualityValidator(db_path=self.db_path)
@@ -30,7 +30,7 @@ class DAGRunner:
         return conn
 
     def _send_webhook_alert(
-        self, run_id: str, step_name: str, status: str, error_msg: Optional[str]
+        self, run_id: str, step_name: str, status: str, error_msg: str | None
     ) -> None:
         """Transmits high-priority execution warnings asynchronously."""
         webhook_url = get_webhook_url()
@@ -39,12 +39,12 @@ class DAGRunner:
 
         payload = {
             "content": f"⚠️ **Pipeline Alert Breach**\n"
-                       f"• **Run ID:** `{run_id}`\n"
-                       f"• **Step Target:** `{step_name}`\n"
-                       f"• **Failure Status:** `{status}`\n"
-                       f"• **Log Trace:** `{error_msg or 'No trace recorded.'}`"
+            f"• **Run ID:** `{run_id}`\n"
+            f"• **Step Target:** `{step_name}`\n"
+            f"• **Failure Status:** `{status}`\n"
+            f"• **Log Trace:** `{error_msg or 'No trace recorded.'}`"
         }
-        
+
         try:
             data = json.dumps(payload).encode("utf-8")
             req = urllib.request.Request(
@@ -63,7 +63,7 @@ class DAGRunner:
         except Exception as err:
             logger.error(f"Failed to transmit telemetry webhook: {err}")
 
-    def fetch_pipeline_tasks(self) -> List[Dict[str, Any]]:
+    def fetch_pipeline_tasks(self) -> list[dict[str, Any]]:
         """Fetches active tasks from metadata ordered by execution sequence."""
         query = """
             SELECT step_id, step_name, target_table, execution_order
@@ -88,7 +88,7 @@ class DAGRunner:
         step_name: str,
         status: str,
         execution_time: str = "N/A",
-        error_message: Optional[str] = None,
+        error_message: str | None = None,
     ) -> None:
         """Writes execution logs directly to database telemetry."""
         usage = resource.getrusage(resource.RUSAGE_SELF)
@@ -117,20 +117,18 @@ class DAGRunner:
                     ),
                 )
                 conn.commit()
-            
+
             if status in ("FAILED", "CRITICAL"):
-                self._send_webhook_alert(
-                    run_id, step_name, status, error_message
-                )
-                
+                self._send_webhook_alert(run_id, step_name, status, error_message)
+
         except sqlite3.Error as e:
             logger.error(f"Failed to log execution state for {step_name}: {e}")
 
-    def execute_task_logic(self, task: Dict[str, Any]) -> bool:
+    def execute_task_logic(self, task: dict[str, Any]) -> bool:
         """Executes data operations or validates table status frameworks."""
         target_table = task.get("target_table")
         step_name = task.get("step_name", "Unknown Step")
-        
+
         if not target_table:
             logger.error("Task definition is missing 'target_table'.")
             return False
@@ -148,13 +146,13 @@ class DAGRunner:
         try:
             with self._get_db_connection() as conn:
                 cursor = conn.cursor()
-                
+
                 if target_table == "analytics_kpis":
                     logger.info("Running calculation loop for analytics_kpis...")
                     cursor.execute("SELECT username FROM staging_users;")
                     users = cursor.fetchall()
-                    
-                    now_str = datetime.now(timezone.utc).isoformat()
+
+                    now_str = datetime.now(UTC).isoformat()
                     for user in users:
                         username = user["username"]
                         cursor.execute(
@@ -165,21 +163,18 @@ class DAGRunner:
                         )
                     conn.commit()
                     logger.info(f"Processed metrics for {len(users)} users.")
-                
+
                 elif target_table == "summary_metrics":
                     logger.info("Running aggregation loop for summary_metrics...")
                     cursor.execute(
-                        "SELECT MAX(username_length) as max_len "
-                        "FROM analytics_kpis;"
+                        "SELECT MAX(username_length) as max_len " "FROM analytics_kpis;"
                     )
                     row = cursor.fetchone()
                     max_length = (
-                        row["max_len"]
-                        if (row and row["max_len"] is not None)
-                        else 0
+                        row["max_len"] if (row and row["max_len"] is not None) else 0
                     )
-                    
-                    now_str = datetime.now(timezone.utc).isoformat()
+
+                    now_str = datetime.now(UTC).isoformat()
                     cursor.execute(
                         "INSERT INTO summary_metrics "
                         "(metric_name, metric_value, calculated_at) "
@@ -195,9 +190,9 @@ class DAGRunner:
                     if not cursor.fetchone():
                         logger.error(f"Gate Breach: '{target_table}' empty.")
                         return False
-                    
+
             return True
-            
+
         except sqlite3.Error as e:
             logger.error(f"Database error on '{target_table}': {e}")
             return False
@@ -217,17 +212,15 @@ class DAGRunner:
             for task in tasks:
                 step_name = task["step_name"]
                 logger.info(f"Orchestrating operational task: {step_name}")
-                
+
                 start_time = time.time()
                 self.log_execution(run_id, step_name, "RUNNING")
-                
+
                 success = self.execute_task_logic(task)
                 duration_str = f"{time.time() - start_time:.2f}s"
-                
+
                 if success:
-                    self.log_execution(
-                        run_id, step_name, "SUCCESS", duration_str
-                    )
+                    self.log_execution(run_id, step_name, "SUCCESS", duration_str)
                 else:
                     self.log_execution(
                         run_id,
@@ -238,6 +231,6 @@ class DAGRunner:
                     )
                     logger.error(f"Pipeline stopped early at: {step_name}")
                     break
-                    
+
         except Exception as e:
             logger.critical(f"Unhandled critical crash sequence: {e}")
