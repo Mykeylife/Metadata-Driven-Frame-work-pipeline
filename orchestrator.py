@@ -1,7 +1,13 @@
 import logging
 import sqlite3
 from typing import List, Tuple
-from pipeline.config import get_db_path
+
+try:
+    # Handles execution context when run from the repository root directory
+    from pipeline.config import get_db_path
+except ModuleNotFoundError:
+    # Handles direct execution or inner package context during absolute pytest paths
+    from config import get_db_path
 
 # Configure structured production-ready terminal logging framework
 logging.basicConfig(
