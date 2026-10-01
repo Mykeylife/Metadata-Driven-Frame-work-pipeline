@@ -1,243 +1,144 @@
-import json
-import logging
-import resource
-import sqlite3
+ import os
 import time
-import urllib.request
-import uuid
-from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
-
-# Import centralized configuration parameters and validators
-from pipeline.config import get_db_path, get_webhook_url
+import logging
+import sqlite3
+import resource
+from typing import Optional
+from pipeline.config import get_db_path
 from pipeline.validators import DataQualityValidator
 
-# Set up logger
-logger = logging.getLogger("pipeline.dag_runner")
+# Configure production logging layout
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s"
+)
+logger = logging.getLogger("dag_runner")
 
 
 class DAGRunner:
+    """Orchestrates data parsing, transformations, and KPI loops using metadata configuration matrices."""
 
-    def __init__(self, db_path: Optional[str] = None):
-        self.db_path = db_path if db_path is not None else get_db_path()
-        # Initialize our automated quality gating engine
-        self.validator = DataQualityValidator(db_path=self.db_path)
+    def __init__(self, pipeline_name: str) -> None:
+        self.pipeline_name: str = pipeline_name
+        self.status: str = "PENDING"
+        self.db_path: str = get_db_path()
 
-    def _get_db_connection(self) -> sqlite3.Connection:
-        """Creates and returns a connection to the SQLite simulation store."""
-        conn = sqlite3.connect(self.db_path)
-        conn.row_factory = sqlite3.Row
-        return conn
-
-    def _send_webhook_alert(
-        self, run_id: str, step_name: str, status: str, error_msg: Optional[str]
-    ) -> None:
-        """Transmits high-priority execution warnings asynchronously."""
-        webhook_url = get_webhook_url()
-        if not webhook_url:
-            return
-
-        payload = {
-            "content": f"⚠️ **Pipeline Alert Breach**\n"
-                       f"• **Run ID:** `{run_id}`\n"
-                       f"• **Step Target:** `{step_name}`\n"
-                       f"• **Failure Status:** `{status}`\n"
-                       f"• **Log Trace:** `{error_msg or 'No trace recorded.'}`"
-        }
+    def run(self) -> None:
+        """Executes the data lifecycle processing steps sorted by operational priority order."""
+        logger.info("Starting ingestion lifecycle execution for: %s", self.pipeline_name)
+        self.status = "RUNNING"
         
-        try:
-            data = json.dumps(payload).encode("utf-8")
-            req = urllib.request.Request(
-                webhook_url,
-                data=data,
-                headers={
-                    "Content-Type": "application/json",
-                    "User-Agent": "PipelineOrchestrator/1.0",
-                },
-            )
-            with urllib.request.urlopen(req, timeout=5) as response:
-                if response.status not in (200, 204):
-                    logger.warning(
-                        f"Unexpected webhook response code: {response.status}"
-                    )
-        except Exception as err:
-            logger.error(f"Failed to transmit telemetry webhook: {err}")
-
-    def fetch_pipeline_tasks(self) -> List[Dict[str, Any]]:
-        """Fetches active tasks from metadata ordered by execution sequence."""
-        query = """
-            SELECT step_id, step_name, target_table, execution_order
-            FROM pipeline_metadata
-            WHERE is_active = 1
-            ORDER BY execution_order ASC;
-        """
-        try:
-            with self._get_db_connection() as conn:
-                cursor = conn.cursor()
-                cursor.execute(query)
-                tasks = [dict(row) for row in cursor.fetchall()]
-                logger.info(f"Successfully retrieved {len(tasks)} tasks.")
-                return tasks
-        except sqlite3.OperationalError as e:
-            logger.error(f"Schema missing or misconfigured: {e}.")
-            raise
-
-    def log_execution(
-        self,
-        run_id: str,
-        step_name: str,
-        status: str,
-        execution_time: str = "N/A",
-        error_message: Optional[str] = None,
-    ) -> None:
-        """Writes execution logs directly to database telemetry."""
-        usage = resource.getrusage(resource.RUSAGE_SELF)
-        peak_mem = usage.ru_maxrss
-        cpu_time = usage.ru_utime + usage.ru_stime
-
-        insert_query = """
-            INSERT INTO pipeline_execution_logs 
-            (run_id, step_name, status, execution_time, 
-             peak_memory_kb, cpu_time_seconds, error_message)
-            VALUES (?, ?, ?, ?, ?, ?, ?);
-        """
-        try:
-            with self._get_db_connection() as conn:
-                cursor = conn.cursor()
-                cursor.execute(
-                    insert_query,
-                    (
-                        run_id,
-                        step_name,
-                        status,
-                        execution_time,
-                        peak_mem,
-                        cpu_time,
-                        error_message,
-                    ),
-                )
-                conn.commit()
-            
-            if status in ("FAILED", "CRITICAL"):
-                self._send_webhook_alert(
-                    run_id, step_name, status, error_message
-                )
-                
-        except sqlite3.Error as e:
-            logger.error(f"Failed to log execution state for {step_name}: {e}")
-
-    def execute_task_logic(self, task: Dict[str, Any]) -> bool:
-        """Executes data operations or validates table status frameworks."""
-        target_table = task.get("target_table")
-        step_name = task.get("step_name", "Unknown Step")
-        
-        if not target_table:
-            logger.error("Task definition is missing 'target_table'.")
-            return False
-
-        # --- LIVE DATA QUALITY GATE BREACH BARRIER ---
-        self.validator._get_db_connection = self._get_db_connection
-        if not self.validator.validate_step(task):
-            msg = (
-                f"Quality Gate Breach: Validations failed for step "
-                f"'{step_name}' on table '{target_table}'."
-            )
-            logger.error(msg)
-            return False
+        start_time = time.time()
+        start_ru = resource.getrusage(resource.RUSAGE_SELF)
 
         try:
-            with self._get_db_connection() as conn:
-                cursor = conn.cursor()
-                
-                if target_table == "analytics_kpis":
-                    logger.info("Running calculation loop for analytics_kpis...")
+            # 1. Initialize and execute boot-level atomic schema verification
+            validator = DataQualityValidator()
+            if not validator.validate_atomic_schema(self.db_path):
+                logger.error("Database boot schema validation failed. Halting runtime execution loop.")
+                self.status = "FAILED"
+                return
+
+            conn = sqlite3.connect(self.db_path)
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+
+            # 2. Fetch active data tasks matching execution rules
+            cursor.execute("""
+                SELECT step_id, step_name, target_table, execution_order 
+                FROM pipeline_metadata 
+                WHERE is_active = 1
+                ORDER BY execution_order ASC;
+            """)
+            steps = cursor.fetchall()
+
+            if not steps:
+                logger.warning("No operational steps registered for execution context.")
+                self.status = "SKIPPED"
+                conn.close()
+                return
+
+            # 3. Iterate through data worker layers dynamically
+            for step in steps:
+                step_id = step["step_id"]
+                step_name = step["step_name"]
+                target_table = step["target_table"]
+
+                logger.info("[Step %d] Initializing worker: %s -> Target: %s", step_id, step_name, target_table)
+
+                # Row-count safety validation barrier
+                if target_table == "staging_users":
+                    cursor.execute("SELECT COUNT(*) as cnt FROM staging_users;")
+                    row = cursor.fetchone()
+                    if row and row["cnt"] == 0:
+                        logger.error("Safety guard triggered: 'staging_users' is completely empty. Halting pipeline.")
+                        self.status = "FAILED"
+                        break
+
+                # 4. Complete actual extraction, analytical calculation, and transformation loops
+                if step_name == "Aggregate Analytics Metrics" or target_table == "summary_metrics":
+                    # Compute analytical metrics from production datasets
                     cursor.execute("SELECT username FROM staging_users;")
                     users = cursor.fetchall()
                     
-                    now_str = datetime.now(timezone.utc).isoformat()
-                    for user in users:
-                        username = user["username"]
-                        cursor.execute(
-                            "INSERT INTO analytics_kpis "
-                            "(username, username_length, processed_at) "
-                            "VALUES (?, ?, ?);",
-                            (username, len(username), now_str),
-                        )
-                    conn.commit()
-                    logger.info(f"Processed metrics for {len(users)} users.")
-                
-                elif target_table == "summary_metrics":
-                    logger.info("Running aggregation loop for summary_metrics...")
-                    cursor.execute(
-                        "SELECT MAX(username_length) as max_len "
-                        "FROM analytics_kpis;"
-                    )
-                    row = cursor.fetchone()
-                    max_length = (
-                        row["max_len"]
-                        if (row and row["max_len"] is not None)
-                        else 0
-                    )
-                    
-                    now_str = datetime.now(timezone.utc).isoformat()
-                    cursor.execute(
-                        "INSERT INTO summary_metrics "
-                        "(metric_name, metric_value, calculated_at) "
-                        "VALUES (?, ?, ?);",
-                        ("max_username_length", str(max_length), now_str),
-                    )
-                    conn.commit()
-                    logger.info(f"Aggregations complete. Max: {max_length}")
+                    if users:
+                        # Extract and validate records with inline row data checks
+                        valid_users = []
+                        for u in users:
+                            row_dict = dict(u) if u else {}
+                            if validator.validate_row_record("staging_users", row_dict):
+                                valid_users.append(u)
+                            else:
+                                logger.warning("Skipping individual corrupted data record inside staging sweep.")
 
-                else:
-                    logger.info(f"Validating staging table: {target_table}")
-                    cursor.execute(f"SELECT 1 FROM {target_table} LIMIT 1;")
-                    if not cursor.fetchone():
-                        logger.error(f"Gate Breach: '{target_table}' empty.")
-                        return False
-                    
-            return True
-            
-        except sqlite3.Error as e:
-            logger.error(f"Database error on '{target_table}': {e}")
-            return False
+                        if not valid_users:
+                            logger.warning("No valid rows passed the data quality threshold for calculations.")
+                            continue
 
-    def run_pipeline(self) -> None:
-        """Orchestrates your end-to-end data pipeline flow sequences."""
-        run_id = str(uuid.uuid4())
-        msg = f"Starting orchestration run reference UUID: {run_id}"
-        logger.info(msg)
+                        max_len = max(len(u["username"]) for u in valid_users if u["username"])
+                        
+                        # Insert computed KPIs directly into data stores safely
+                        cursor.execute("""
+                            INSERT INTO summary_metrics (metric_name, metric_value, calculated_at)
+                            VALUES ('max_username_length', ?, datetime('now'));
+                        """, (str(max_len),))
+                        
+                        # Calculate and store individual customer metric boundaries
+                        for user in valid_users:
+                            username = user["username"]
+                            if username:
+                                cursor.execute("""
+                                    INSERT INTO analytics_kpis (username, username_length, processed_at)
+                                    VALUES (?, ?, datetime('now'));
+                                """, (username, len(username)))
 
-        try:
-            tasks = self.fetch_pipeline_tasks()
-            if not tasks:
-                logger.warning("No active pipeline metadata rows discovered.")
-                return
+                logger.info("[Step %d] Executed successfully.", step_id)
 
-            for task in tasks:
-                step_name = task["step_name"]
-                logger.info(f"Orchestrating operational task: {step_name}")
-                
-                start_time = time.time()
-                self.log_execution(run_id, step_name, "RUNNING")
-                
-                success = self.execute_task_logic(task)
-                duration_str = f"{time.time() - start_time:.2f}s"
-                
-                if success:
-                    self.log_execution(
-                        run_id, step_name, "SUCCESS", duration_str
-                    )
-                else:
-                    self.log_execution(
-                        run_id,
-                        step_name,
-                        "FAILED",
-                        duration_str,
-                        "Quality gate execution failure.",
-                    )
-                    logger.error(f"Pipeline stopped early at: {step_name}")
-                    break
-                    
+            if self.status != "FAILED":
+                self.status = "SUCCESS"
+                conn.commit()
+                logger.info("DAG step execution completed cleanly.")
+
+            conn.close()
+
         except Exception as e:
-            logger.critical(f"Unhandled critical crash sequence: {e}")
+            self.status = "FAILED"
+            logger.error("Critical failure during DAG loop execution: %s", str(e))
+            raise e
+
+        finally:
+            # 5. Measure biometrics tracking footprint
+            end_time = time.time()
+            end_ru = resource.getrusage(resource.RUSAGE_SELF)
+            
+            duration = end_time - start_time
+            cpu_time = (end_ru.ru_utime - start_ru.ru_utime) + (end_ru.ru_stime - start_ru.ru_stime)
+            peak_memory = end_ru.ru_maxrss  # Measured in kilobytes
+
+            logger.info("Pipeline metrics tracked -> Duration: %.4fs | CPU Time: %.4fs | Peak Memory: %d KB", 
+                        duration, cpu_time, peak_memory)
+
+
+if __name__ == "__main__":
+    runner = DAGRunner(pipeline_name="Production-Ingestion-Flow")
+    runner.run()
