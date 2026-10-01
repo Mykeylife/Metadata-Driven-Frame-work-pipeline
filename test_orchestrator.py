@@ -1,7 +1,10 @@
 import sqlite3
 import pytest
 from unittest.mock import patch
-from pipeline.orchestrator import fetch_active_steps, execute_pipeline
+
+# We mock the configuration paths before importing the production modules to avoid path collisions
+with patch("pipeline.config.get_db_path", return_value=":memory:"):
+    from pipeline.orchestrator import fetch_active_steps, execute_pipeline
 
 @pytest.fixture
 def memory_db_conn():
