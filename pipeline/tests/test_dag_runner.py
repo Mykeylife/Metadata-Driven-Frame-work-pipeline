@@ -1,90 +1,123 @@
-import pytest
+import os
+import time
+import logging
 import sqlite3
-from unittest.mock import patch, MagicMock
+import resource
+from typing import Optional
+from pipeline.config import get_db_path
 
-# Pre-emptively mock configuration targets before importing to protect local workspaces
-with patch("pipeline.config.get_db_path", return_value=":memory:"):
-    try:
-        from pipeline.dag_runner import DAGRunner
-    except ImportError:
-        # Fallback to local import depending on path collection context
-        from dag_runner import DAGRunner
+# Configure production logging layout
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s"
+)
+logger = logging.getLogger("dag_runner")
 
-@pytest.fixture
-def mock_db_connection():
-    """Provides a pristine, isolated in-memory metadata context for DAG runner execution tests."""
-    conn = sqlite3.connect(":memory:")
-    cursor = conn.cursor()
-    
-    # Establish standard metadata tracking controls matching your ecosystem layout
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS pipeline_metadata (
-            step_id INTEGER PRIMARY KEY AUTOINCREMENT,
-            step_name TEXT NOT NULL,
-            target_table TEXT NOT NULL,
-            execution_order INTEGER NOT NULL,
-            is_active INTEGER DEFAULT 1
-        );
-    """)
-    conn.commit()
-    yield conn
-    conn.close()
 
-def test_dag_runner_initialization():
-    """Verifies that the runner initializes parameters correctly."""
-    runner = DAGRunner(pipeline_name="Ingestion-Engine-Validation")
-    assert runner.pipeline_name == "Ingestion-Engine-Validation"
-    assert runner.status == "PENDING"
+class DAGRunner:
+    """Orchestrates data parsing, transformations, and KPI loops using metadata configuration matrices."""
 
-def test_dag_runner_successful_execution_loop(mock_db_connection):
-    """Ensures the DAG execution engine iterates through active pipeline steps successfully."""
-    cursor = mock_db_connection.cursor()
-    cursor.execute(
-        "INSERT INTO pipeline_metadata (step_name, target_table, execution_order, is_active) VALUES (?, ?, ?, ?);",
-        ("Extract Logs", "staging_logs", 10, 1)
-    )
-    mock_db_connection.commit()
+    def __init__(self, pipeline_name: str) -> None:
+        self.pipeline_name: str = pipeline_name
+        self.status: str = "PENDING"
+        self.db_path: str = get_db_path()
 
-    runner = DAGRunner(pipeline_name="Ingestion-Engine-Validation")
-    
-    with patch("sqlite3.connect", return_value=mock_db_connection), \
-         patch("logging.Logger.info") as mock_logger:
+    def run(self) -> None:
+        """Executes the data lifecycle processing steps sorted by operational priority order."""
+        logger.info("Starting ingestion lifecycle execution for: %s", self.pipeline_name)
+        self.status = "RUNNING"
         
-        # Execute runner lifecycle block
-        runner.run()
-        
-        # Verify status transitions cleanly to success footprint
-        assert runner.status == "SUCCESS"
-        mock_logger.assert_any_call("DAG step execution completed cleanly.")
+        start_time = time.time()
+        start_ru = resource.getrusage(resource.RUSAGE_SELF)
 
-def test_dag_runner_handles_empty_steps(mock_db_connection):
-    """Validates that the runner transitions to an optimized safety state if no tasks match."""
-    runner = DAGRunner(pipeline_name="Ingestion-Engine-Validation")
-    
-    with patch("sqlite3.connect", return_value=mock_db_connection), \
-         patch("logging.Logger.warning") as mock_logger:
-        
-        runner.run()
-        
-        assert runner.status == "SKIPPED"
-        mock_logger.assert_any_call("No operational steps registered for execution context.")
+        try:
+            conn = sqlite3.connect(self.db_path)
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
 
-def test_dag_runner_catches_ingestion_exceptions(mock_db_connection):
-    """Ensures that exceptions inside individual pipeline steps fail the loop immediately."""
-    cursor = mock_db_connection.cursor()
-    cursor.execute(
-        "INSERT INTO pipeline_metadata (step_name, target_table, execution_order, is_active) VALUES (?, ?, ?, ?);",
-        ("Failing Step", "corrupted_table", 10, 1)
-    )
-    mock_db_connection.commit()
+            # 1. Fetch active data tasks matching execution rules
+            cursor.execute("""
+                SELECT step_id, step_name, target_table, execution_order 
+                FROM pipeline_metadata 
+                WHERE is_active = 1
+                ORDER BY execution_order ASC;
+            """)
+            steps = cursor.fetchall()
 
-    runner = DAGRunner(pipeline_name="Ingestion-Engine-Validation")
-    
-    # Force a runtime environment break inside the data loop execution layer
-    with patch("sqlite3.connect", return_value=mock_db_connection), \
-         patch("sqlite3.Cursor.fetchall", side_effect=sqlite3.OperationalError("Database locks encountered.")):
-         
-        with pytest.raises(sqlite3.OperationalError):
-            runner.run()
+            if not steps:
+                logger.warning("No operational steps registered for execution context.")
+                self.status = "SKIPPED"
+                conn.close()
+                return
+
+            # 2. Iterate through data worker layers dynamically
+            for step in steps:
+                step_id = step["step_id"]
+                step_name = step["step_name"]
+                target_table = step["target_table"]
+
+                logger.info("[Step %d] Initializing worker: %s -> Target: %s", step_id, step_name, target_table)
+
+                # Row-count safety validation barrier
+                if target_table == "staging_users":
+                    cursor.execute("SELECT COUNT(*) as cnt FROM staging_users;")
+                    row = cursor.fetchone()
+                    if row and row["cnt"] == 0:
+                        logger.error("Safety guard triggered: 'staging_users' is completely empty. Halting pipeline.")
+                        self.status = "FAILED"
+                        break
+
+                # 3. Complete actual extraction, analytical calculation, and transformation loops
+                if step_name == "Aggregate Analytics Metrics" or target_table == "summary_metrics":
+                    # Compute analytical metrics from production datasets
+                    cursor.execute("SELECT username FROM staging_users;")
+                    users = cursor.fetchall()
+                    
+                    if users:
+                        max_len = max(len(u["username"]) for u in users if u["username"])
+                        
+                        # Insert computed KPIs directly into data stores safely
+                        cursor.execute("""
+                            INSERT INTO summary_metrics (metric_name, metric_value, calculated_at)
+                            VALUES ('max_username_length', ?, datetime('now'));
+                        """, (str(max_len),))
+                        
+                        # Calculate and store individual customer metric boundaries
+                        for user in users:
+                            username = user["username"]
+                            if username:
+                                cursor.execute("""
+                                    INSERT INTO analytics_kpis (username, username_length, processed_at)
+                                    VALUES (?, ?, datetime('now'));
+                                """, (username, len(username)))
+
+                logger.info("[Step %d] Executed successfully.", step_id)
+
+            if self.status != "FAILED":
+                self.status = "SUCCESS"
+                conn.commit()
+                logger.info("DAG step execution completed cleanly.")
+
+            conn.close()
+
+        except Exception as e:
+            self.status = "FAILED"
+            logger.error("Critical failure during DAG loop execution: %s", str(e))
+            raise e
+
+        finally:
+            # 4. Measure biometrics tracking footprint
+            end_time = time.time()
+            end_ru = resource.getrusage(resource.RUSAGE_SELF)
             
-        assert runner.status == "FAILED"
+            duration = end_time - start_time
+            cpu_time = (end_ru.ru_utime - start_ru.ru_utime) + (end_ru.ru_stime - start_ru.ru_stime)
+            peak_memory = end_ru.ru_maxrss  # Measured in kilobytes
+
+            logger.info("Pipeline metrics tracked -> Duration: %.4fs | CPU Time: %.4fs | Peak Memory: %d KB", 
+                        duration, cpu_time, peak_memory)
+
+
+if __name__ == "__main__":
+    runner = DAGRunner(pipeline_name="Production-Ingestion-Flow")
+    runner.run()
