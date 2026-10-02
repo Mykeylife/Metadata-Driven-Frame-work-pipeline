@@ -1,123 +1,191 @@
-import os
-import time
-import logging
+import pytest
 import sqlite3
-import resource
-from typing import Optional
-from pipeline.config import get_db_path
+from unittest.mock import patch, MagicMock
 
-# Configure production logging layout
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(message)s"
-)
-logger = logging.getLogger("dag_runner")
+# Pre-emptively mock configuration targets to prevent path resolution conflicts
+with patch("pipeline.config.get_db_path", return_value=":memory:"):
+    try:
+        from pipeline.dag_runner import DAGRunner
+    except ImportError:
+        from dag_runner import DAGRunner
 
+@pytest.fixture
+def clean_db_conn():
+    """Provides a fresh, perfectly structured in-memory SQLite database for test insulation."""
+    conn = sqlite3.connect(":memory:")
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+    
+    # 1. Build the production metadata control schemas
+    cursor.execute("""
+        CREATE TABLE pipeline_metadata (
+            step_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            step_name TEXT NOT NULL,
+            target_table TEXT NOT NULL,
+            execution_order INTEGER NOT NULL,
+            is_active INTEGER DEFAULT 1
+        );
+    """)
+    
+    # 2. Build the primary data-plane target tables required by DataQualityValidator structures
+    cursor.execute("CREATE TABLE staging_users (id INTEGER PRIMARY KEY, username TEXT);")
+    cursor.execute("CREATE TABLE analytics_kpis (kpi_id INTEGER PRIMARY KEY, username TEXT, username_length INTEGER, processed_at TEXT);")
+    cursor.execute("CREATE TABLE summary_metrics (summary_id INTEGER PRIMARY KEY, metric_name TEXT, metric_value TEXT, calculated_at TEXT);")
+    
+    conn.commit()
+    yield conn
+    conn.close()
 
-class DAGRunner:
-    """Orchestrates data parsing, transformations, and KPI loops using metadata configuration matrices."""
+def test_dag_runner_initialization():
+    """Verifies that the runner initializes parameters correctly."""
+    runner = DAGRunner(pipeline_name="Ingestion-Engine-Validation")
+    assert runner.pipeline_name == "Ingestion-Engine-Validation"
+    assert runner.status == "PENDING"
 
-    def __init__(self, pipeline_name: str) -> None:
-        self.pipeline_name: str = pipeline_name
-        self.status: str = "PENDING"
-        self.db_path: str = get_db_path()
+def test_dag_runner_successful_execution_loop(clean_db_conn):
+    """Ensures the DAG execution engine walks through active transformations smoothly with valid data."""
+    cursor = clean_db_conn.cursor()
+    cursor.execute(
+        "INSERT INTO pipeline_metadata (step_name, target_table, execution_order, is_active) VALUES (?, ?, ?, ?);",
+        ("Aggregate Analytics Metrics", "summary_metrics", 10, 1)
+    )
+    cursor.executemany(
+        "INSERT INTO staging_users (id, username) VALUES (?, ?);",
+        [(1, "alice_green"), (2, "bob_secure")]
+    )
+    clean_db_conn.commit()
 
-    def run(self) -> None:
-        """Executes the data lifecycle processing steps sorted by operational priority order."""
-        logger.info("Starting ingestion lifecycle execution for: %s", self.pipeline_name)
-        self.status = "RUNNING"
+    runner = DAGRunner(pipeline_name="Ingestion-Engine-Validation")
+    
+    with patch("sqlite3.connect", return_value=clean_db_conn), \
+         patch("logging.Logger.info") as mock_logger:
         
-        start_time = time.time()
-        start_ru = resource.getrusage(resource.RUSAGE_SELF)
+        runner.run()
+        
+        # Verify status updates correctly on full lifecycle completion
+        assert runner.status == "SUCCESS"
+        mock_logger.assert_any_call("DAG step execution completed cleanly.")
+        
+        # Pull calculated state structures out to verify business analytical accuracy
+        cursor.execute("SELECT metric_value FROM summary_metrics WHERE metric_name = 'max_username_length';")
+        metric_row = cursor.fetchone()
+        assert metric_row is not None
+        assert metric_row["metric_value"] == "11"  # "alice_green" is 11 characters long
 
-        try:
-            conn = sqlite3.connect(self.db_path)
-            conn.row_factory = sqlite3.Row
-            cursor = conn.cursor()
+def test_dag_runner_skips_invalid_corrupted_rows(clean_db_conn):
+    """Verifies that individual row validations gracefully drop corrupted records without breaking the run."""
+    cursor = clean_db_conn.cursor()
+    cursor.execute(
+        "INSERT INTO pipeline_metadata (step_name, target_table, execution_order, is_active) VALUES (?, ?, ?, ?);",
+        ("Aggregate Analytics Metrics", "summary_metrics", 10, 1)
+    )
+    # Seed one valid user and two corrupted records (null/empty strings) to evaluate the validator gating loop
+    cursor.executemany(
+        "INSERT INTO staging_users (id, username) VALUES (?, ?);",
+        [(1, "valid_user"), (2, ""), (3, None)]
+    )
+    clean_db_conn.commit()
 
-            # 1. Fetch active data tasks matching execution rules
-            cursor.execute("""
-                SELECT step_id, step_name, target_table, execution_order 
-                FROM pipeline_metadata 
-                WHERE is_active = 1
-                ORDER BY execution_order ASC;
-            """)
-            steps = cursor.fetchall()
+    runner = DAGRunner(pipeline_name="Data-Quality-Gating-Validation")
+    
+    with patch("sqlite3.connect", return_value=clean_db_conn), \
+         patch("logging.Logger.warning") as mock_warn:
+        
+        runner.run()
+        
+        assert runner.status == "SUCCESS"
+        # Confirm that the data-quality gating messages were actively triggered
+        mock_warn.assert_any_call("Skipping individual corrupted data record inside staging sweep.")
+        
+        # Ensure KPIs are *only* recorded for the single clean user payload
+        cursor.execute("SELECT COUNT(*) as count FROM analytics_kpis;")
+        assert cursor.fetchone()["count"] == 1
 
-            if not steps:
-                logger.warning("No operational steps registered for execution context.")
-                self.status = "SKIPPED"
-                conn.close()
-                return
+def test_dag_runner_halts_if_all_rows_fail_validation(clean_db_conn):
+    """Ensures that if all staging rows are completely corrupted, the step skips calculations gracefully."""
+    cursor = clean_db_conn.cursor()
+    cursor.execute(
+        "INSERT INTO pipeline_metadata (step_name, target_table, execution_order, is_active) VALUES (?, ?, ?, ?);",
+        ("Aggregate Analytics Metrics", "summary_metrics", 10, 1)
+    )
+    cursor.execute("INSERT INTO staging_users (id, username) VALUES (?, ?);", (1, "   ")) # Spaces get trimmed and caught by validator
+    clean_db_conn.commit()
 
-            # 2. Iterate through data worker layers dynamically
-            for step in steps:
-                step_id = step["step_id"]
-                step_name = step["step_name"]
-                target_table = step["target_table"]
+    runner = DAGRunner(pipeline_name="All-Corrupted-Payload-Validation")
+    
+    with patch("sqlite3.connect", return_value=clean_db_conn), \
+         patch("logging.Logger.warning") as mock_warn:
+        
+        runner.run()
+        
+        assert runner.status == "SUCCESS"
+        mock_warn.assert_any_call("No valid rows passed the data quality threshold for calculations.")
 
-                logger.info("[Step %d] Initializing worker: %s -> Target: %s", step_id, step_name, target_table)
+def test_dag_runner_aborts_on_failed_boot_schema(clean_db_conn):
+    """Validates that a broken database schema terminates the entire pipeline immediately at boot."""
+    # Force a failure by dropping a core table required by the DataQualityValidator expectations
+    cursor = clean_db_conn.cursor()
+    cursor.execute("DROP TABLE analytics_kpis;")
+    clean_db_conn.commit()
 
-                # Row-count safety validation barrier
-                if target_table == "staging_users":
-                    cursor.execute("SELECT COUNT(*) as cnt FROM staging_users;")
-                    row = cursor.fetchone()
-                    if row and row["cnt"] == 0:
-                        logger.error("Safety guard triggered: 'staging_users' is completely empty. Halting pipeline.")
-                        self.status = "FAILED"
-                        break
+    runner = DAGRunner(pipeline_name="Schema-Failure-Validation")
+    
+    with patch("sqlite3.connect", return_value=clean_db_conn), \
+         patch("logging.Logger.error") as mock_error:
+        
+        runner.run()
+        
+        # Pipeline must transition to FAILED instantly without querying steps
+        assert runner.status == "FAILED"
+        mock_error.assert_any_call("Database boot schema validation failed. Halting runtime execution loop.")
 
-                # 3. Complete actual extraction, analytical calculation, and transformation loops
-                if step_name == "Aggregate Analytics Metrics" or target_table == "summary_metrics":
-                    # Compute analytical metrics from production datasets
-                    cursor.execute("SELECT username FROM staging_users;")
-                    users = cursor.fetchall()
-                    
-                    if users:
-                        max_len = max(len(u["username"]) for u in users if u["username"])
-                        
-                        # Insert computed KPIs directly into data stores safely
-                        cursor.execute("""
-                            INSERT INTO summary_metrics (metric_name, metric_value, calculated_at)
-                            VALUES ('max_username_length', ?, datetime('now'));
-                        """, (str(max_len),))
-                        
-                        # Calculate and store individual customer metric boundaries
-                        for user in users:
-                            username = user["username"]
-                            if username:
-                                cursor.execute("""
-                                    INSERT INTO analytics_kpis (username, username_length, processed_at)
-                                    VALUES (?, ?, datetime('now'));
-                                """, (username, len(username)))
+def test_dag_runner_handles_empty_metadata_steps(clean_db_conn):
+    """Validates that the runner transitions to an optimized SKIPPED state if no tasks match."""
+    runner = DAGRunner(pipeline_name="Empty-Metadata-Context-Validation")
+    
+    with patch("sqlite3.connect", return_value=clean_db_conn), \
+         patch("logging.Logger.warning") as mock_logger:
+        
+        runner.run()
+        
+        assert runner.status == "SKIPPED"
+        mock_logger.assert_any_call("No operational steps registered for execution context.")
 
-                logger.info("[Step %d] Executed successfully.", step_id)
+def test_dag_runner_safety_barrier_empty_staging_users(clean_db_conn):
+    """Ensures the pipeline halts if an active step targets staging_users but the table has zero records."""
+    cursor = clean_db_conn.cursor()
+    cursor.execute(
+        "INSERT INTO pipeline_metadata (step_name, target_table, execution_order, is_active) VALUES (?, ?, ?, ?);",
+        ("Process Staging Accounts", "staging_users", 5, 1)
+    )
+    clean_db_conn.commit()
 
-            if self.status != "FAILED":
-                self.status = "SUCCESS"
-                conn.commit()
-                logger.info("DAG step execution completed cleanly.")
+    runner = DAGRunner(pipeline_name="Empty-Staging-Safety-Validation")
+    
+    with patch("sqlite3.connect", return_value=clean_db_conn), \
+         patch("logging.Logger.error") as mock_error:
+        
+        runner.run()
+        
+        assert runner.status == "FAILED"
+        mock_error.assert_any_call("Safety guard triggered: 'staging_users' is completely empty. Halting pipeline.")
 
-            conn.close()
+def test_dag_runner_catches_and_raises_generic_exceptions(clean_db_conn):
+    """Ensures any unexpected structural execution exceptions fail the pipeline and bubble up cleanly."""
+    cursor = clean_db_conn.cursor()
+    cursor.execute(
+        "INSERT INTO pipeline_metadata (step_name, target_table, execution_order, is_active) VALUES (?, ?, ?, ?);",
+        ("Failing Step", "summary_metrics", 10, 1)
+    )
+    clean_db_conn.commit()
 
-        except Exception as e:
-            self.status = "FAILED"
-            logger.error("Critical failure during DAG loop execution: %s", str(e))
-            raise e
-
-        finally:
-            # 4. Measure biometrics tracking footprint
-            end_time = time.time()
-            end_ru = resource.getrusage(resource.RUSAGE_SELF)
+    runner = DAGRunner(pipeline_name="Exception-Handling-Validation")
+    
+    # Inject a fatal driver operational error deep into the table iteration process
+    with patch("sqlite3.connect", return_value=clean_db_conn), \
+         patch("sqlite3.Cursor.fetchall", side_effect=sqlite3.OperationalError("Database hardware disk failure.")):
+         
+        with pytest.raises(sqlite3.OperationalError):
+            runner.run()
             
-            duration = end_time - start_time
-            cpu_time = (end_ru.ru_utime - start_ru.ru_utime) + (end_ru.ru_stime - start_ru.ru_stime)
-            peak_memory = end_ru.ru_maxrss  # Measured in kilobytes
-
-            logger.info("Pipeline metrics tracked -> Duration: %.4fs | CPU Time: %.4fs | Peak Memory: %d KB", 
-                        duration, cpu_time, peak_memory)
-
-
-if __name__ == "__main__":
-    runner = DAGRunner(pipeline_name="Production-Ingestion-Flow")
-    runner.run()
+        assert runner.status == "FAILED"
