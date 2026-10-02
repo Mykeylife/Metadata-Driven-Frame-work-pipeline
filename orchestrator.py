@@ -5,9 +5,11 @@ from typing import List, Tuple
 try:
     # Handles execution context when run from the repository root directory
     from pipeline.config import get_db_path
+    from pipeline.dag_runner import DAGRunner
 except ModuleNotFoundError:
-    # Handles direct execution or inner package context during absolute pytest paths
+    # Handles direct execution or inner package context during absolute paths
     from config import get_db_path
+    from dag_runner import DAGRunner
 
 # Configure structured production-ready terminal logging framework
 logging.basicConfig(
@@ -47,19 +49,22 @@ def execute_pipeline() -> None:
         logger.warning("No active steps found in control tables. Exiting engine flow safely.")
         return
 
-    for step_id, step_name, target_table, execution_order in active_steps:
-        logger.info(
-            "[Step %d] Executing: '%s' -> Destination Target: '%s' (Order: %d)",
-            step_id, step_name, target_table, execution_order
-        )
-        try:
-            # Task simulation execution hook boundary
-            logger.info("[Step %d] Syncing records completely green ✅", step_id)
-        except Exception as e:
-            logger.error("[Step %d] Critical ingestion failure detected: %s", step_id, str(e))
-            raise
-
-    logger.info("Metadata-driven orchestrator engine executed all tasks successfully! 🚀")
+    # Triggering the dynamic DAGRunner to parse, validate, and compute analytical data KPIs live
+    try:
+        logger.info("Active metadata steps validated. Instantiating DAG runner execution loop...")
+        runner = DAGRunner(pipeline_name="Production-Orchestrated-Ingestion-Flow")
+        runner.run()
+        
+        if runner.status == "SUCCESS":
+            logger.info("Metadata-driven orchestrator engine executed all tasks successfully! 🚀")
+        elif runner.status == "SKIPPED":
+            logger.warning("DAG runner completed execution with a SKIPPED status flag.")
+        else:
+            raise RuntimeError(f"DAG runner terminated with an unexpected status: {runner.status}")
+            
+    except Exception as e:
+        logger.error("Critical orchestration failure detected: %s", str(e))
+        raise
 
 if __name__ == "__main__":
     execute_pipeline()
