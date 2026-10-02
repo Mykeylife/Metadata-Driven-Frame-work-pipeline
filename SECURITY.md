@@ -2,7 +2,7 @@
 
 ## Supported Versions
 
-We actively monitor and provide security updates for the following development versions:
+We actively monitor and provide security updates for the following core framework versions:
 
 | Version | Supported          |
 | ------- | ------------------ |
@@ -11,13 +11,13 @@ We actively monitor and provide security updates for the following development v
 
 ## Reporting a Vulnerability
 
-We take the security of our data engineering framework seriously. If you discover any security vulnerabilities or exposure risks within this repository, please do not open a public GitHub issue. 
+We take the security of our Metadata-Driven Framework Pipeline seriously. If you discover an issue or potential exploit, please do not open a public issue tracking thread.
 
-Instead, report the issue directly by emailing the project maintainer at **mykeylife6@gmail.com**. 
+Instead, please submit security discoveries directly by contacting the primary maintainer team via email at **security@example.com** (mykeylife6@gmail.com).
 
-### What to Include:
-* A detailed description of the vulnerability.
-* Steps or a basic proof-of-concept script to reproduce the issue safely.
-* Potential impact details regarding execution environments.
+### What to Include in a Report:
+* A descriptive overview outlining the potential vulnerability impact area.
+* Clear, repeatable step-by-step instructions or an isolated proof-of-concept configuration snippet to help reproduce the issue.
+* Any target system dependencies or runner environmental variations observed.
 
-You will receive an initial response acknowledging your report within 48 hours, followed by active status updates until a patch is released.
+We will review your submittal within 48 hours and coordinate a secure resolution rollout strategy. Thank you for helping keep our pipeline ecosystem secure!
