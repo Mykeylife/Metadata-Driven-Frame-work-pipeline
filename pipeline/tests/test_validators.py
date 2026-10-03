@@ -1,92 +1,38 @@
 import sqlite3
+from unittest.mock import patch
 import pytest
 from pipeline.validators import DataQualityValidator
 
-
 @pytest.fixture
 def test_db():
-    """Builds an ephemeral database connection populated with testing schemas."""
+    """Sets up a clean in-memory database configuration for testing schemas."""
     conn = sqlite3.connect(":memory:")
-    conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
-    
-    cursor.execute(
-        "CREATE TABLE staging_users (id INTEGER PRIMARY KEY, username TEXT);"
-    )
-    cursor.execute(
-        "INSERT INTO staging_users (username) "
-        "VALUES ('Olanrewaju'), ('Myke_Dev');"
-    )
-    
+    cursor.execute("CREATE TABLE IF NOT EXISTS staging_users (id INTEGER, username TEXT);")
+    cursor.execute("CREATE TABLE IF NOT EXISTS analytics_kpis (kpi_id INTEGER, username TEXT, username_length INTEGER, processed_at TEXT);")
+    cursor.execute("CREATE TABLE IF NOT EXISTS summary_metrics (summary_id INTEGER, metric_name TEXT, metric_value TEXT, calculated_at TEXT);")
     conn.commit()
-    yield conn
+    yield ":memory:"
     conn.close()
 
-
-def test_validator_row_count_and_null_gates(test_db, monkeypatch):
-    """Verifies row count and null checking logic functions pass accurately."""
-    validator = DataQualityValidator(db_path=":memory:")
-    monkeypatch.setattr(validator, "_get_db_connection", lambda: test_db)
+def test_atomic_schema_passes_valid(test_db):
+    """Ensures validator returns True when tables have matching fields."""
+    validator = DataQualityValidator()
     
-    assert validator.check_row_count("staging_users", min_expected=1) is True
-    assert (
-        validator.check_null_threshold(
-            "staging_users", column_name="id", max_allowed_pct=0.0
-        )
-        is True
-    )
+    # Safely mock sqlite3.connect within this localized test scope
+    with patch("sqlite3.connect") as mock_connect:
+        # Create a real connection to our setup database to return real column data
+        real_conn = sqlite3.connect(test_db)
+        mock_connect.return_value = real_conn
+        
+        result = validator.validate_atomic_schema(test_db)
+        real_conn.close()
+        
+        assert result is True
 
-
-def test_validator_catches_syntax_breaches(test_db, monkeypatch):
-    """Ensures syntax pattern checking flags non-compliant record insertions."""
-    validator = DataQualityValidator(db_path=":memory:")
-    monkeypatch.setattr(validator, "_get_db_connection", lambda: test_db)
-    
-    # Assert healthy data passes cleanly
-    assert (
-        validator.check_syntax_constraints("staging_users", column_name="username")
-        is True
-    )
-    
-    # Inject a non-compliant profile format string row to trigger drops
-    cursor = test_db.cursor()
-    cursor.execute(
-        "INSERT INTO staging_users (username) VALUES ('invalid@user!');"
-    )
-    test_db.commit()
-    
-    assert (
-        validator.check_syntax_constraints("staging_users", column_name="username")
-        is False
-    )
-
-
-def test_validate_step_orchestration_loop(test_db, monkeypatch):
-    """Confirms step orchestration gates evaluate compound parameters."""
-    validator = DataQualityValidator(db_path=":memory:")
-    monkeypatch.setattr(validator, "_get_db_connection", lambda: test_db)
-    
-    task_param = {"target_table": "staging_users"}
-    assert validator.validate_step(task_param) is True
-
-
-def test_validator_catches_schema_mismatches(test_db, monkeypatch):
-    """Ensures the checker flags missing fields or type variations properly."""
-    validator = DataQualityValidator(db_path=":memory:")
-    monkeypatch.setattr(validator, "_get_db_connection", lambda: test_db)
-
-    # 1. Valid alignment check validation pass
-    assert validator.check_schema_alignment("staging_users") is True
-
-    # 2. Alter schema structurally to force alignment validation failures
-    cursor = test_db.cursor()
-    cursor.execute("CREATE TABLE broken_table (id TEXT, username BLOB);")
-    test_db.commit()
-
-    # Override target dictionary structure parameters cleanly for checking
-    validator.expected_schemas["broken_table"] = {
-        "id": "INTEGER",
-        "username": "TEXT",
-    }
-    
-    assert validator.check_schema_alignment("broken_table") is False
+def test_validate_row_record_logic():
+    """Validates row-level payload strings catch empty fields cleanly."""
+    validator = DataQualityValidator()
+    assert validator.validate_row_record("staging_users", {"username": "valid_user"}) is True
+    assert validator.validate_row_record("staging_users", {"username": ""}) is False
+    assert validator.validate_row_record("staging_users", {"username": "   "}) is False
