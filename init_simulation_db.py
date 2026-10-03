@@ -1,19 +1,30 @@
-import os
+import logging
 import sqlite3
+import os
 
-# Align directly with the DEFAULT_DB_PATH constant in pipeline/config.py
-DEFAULT_DB_PATH = "metadata_control.db"
+try:
+    from pipeline.config import get_db_path
+except ModuleNotFoundError:
+    from config import get_db_path
 
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+logger = logging.getLogger("init_simulation_db")
 
-def init_db(db_path: str = DEFAULT_DB_PATH):
-    """Initializes and seeds the production-grade metadata and business simulation tables."""
-    print(f"Initializing centralized core data schemas inside: {db_path}")
+DB_PATH = get_db_path()
 
-    conn = sqlite3.connect(db_path)
-    conn.row_factory = sqlite3.Row
+def initialize_database() -> None:
+    """Creates local data-plane tables and seeds active metadata configurations."""
+    logger.info("Initializing local simulation database at '%s'...", DB_PATH)
+    
+    # Ensure directory exists
+    db_dir = os.path.dirname(DB_PATH)
+    if db_dir and not os.path.exists(db_dir):
+        os.makedirs(db_dir, exist_ok=True)
+
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
 
-    # 1. Core Sequence Control Table
+    # 1. Create Control Matrix Metadata Table
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS pipeline_metadata (
             step_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -24,29 +35,14 @@ def init_db(db_path: str = DEFAULT_DB_PATH):
         );
     """)
 
-    # 2. Comprehensive Telemetry Audit Table
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS pipeline_execution_logs (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            run_id TEXT NOT NULL,
-            step_name TEXT NOT NULL,
-            status TEXT NOT NULL,
-            execution_time TEXT NOT NULL,
-            peak_memory_kb INTEGER DEFAULT 0,
-            cpu_time_seconds REAL DEFAULT 0.0,
-            error_message TEXT
-        );
-    """)
-
-    # 3. Source Business Data Ingestion Layer
+    # 2. Create Target Data Tables
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS staging_users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            username TEXT NOT NULL UNIQUE
+            username TEXT NOT NULL
         );
     """)
 
-    # 4. Transformed KPI Processing Layer
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS analytics_kpis (
             kpi_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -56,7 +52,6 @@ def init_db(db_path: str = DEFAULT_DB_PATH):
         );
     """)
 
-    # 5. Core Aggregated Reporting Layer
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS summary_metrics (
             summary_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -66,30 +61,31 @@ def init_db(db_path: str = DEFAULT_DB_PATH):
         );
     """)
 
-    # --- CONTROL LAYER DATA SEEDING ---
-    print("Seeding workflow orchestration sequence mappings...")
-    tasks_to_seed = [
-        ("Extract Raw Staging Users", "staging_users", 10),
-        ("Process Metric Analytics KPIs", "analytics_kpis", 20),
-        ("Compile Reporting Summary Metrics", "summary_metrics", 30),
-    ]
-    for step_name, target_table, execution_order in tasks_to_seed:
-        cursor.execute("""
-            INSERT OR IGNORE INTO pipeline_metadata (step_name, target_table, execution_order, is_active)
-            VALUES (?, ?, ?, 1);
-        """, (step_name, target_table, execution_order))
-
-    # --- BUSINESS WORKSPACE RECORDS SEEDING ---
-    print("Injecting initial staging profiles to fulfill processing gates...")
-    sample_users = [("Olanrewaju",), ("Myke",), ("PipelineDev",)]
+    # 3. Seed Metadata Control Configurations
+    logger.info("Seeding pipeline control steps...")
     cursor.executemany("""
-        INSERT OR IGNORE INTO staging_users (username) VALUES (?);
-    """, sample_users)
+        INSERT OR IGNORE INTO pipeline_metadata (step_name, target_table, execution_order, is_active)
+        VALUES (?, ?, ?, ?);
+    """, [
+        ("Process Users Staging", "staging_users", 10, 1),
+        ("Aggregate Analytics Metrics", "summary_metrics", 20, 1)
+    ])
+
+    # 4. Seed Clean Mock Production Users
+    logger.info("Seeding initial staging user data records...")
+    cursor.execute("DELETE FROM staging_users;")  # Clear out stale rows
+    cursor.executemany("""
+        INSERT INTO staging_users (username) VALUES (?);
+    """, [
+        ("micheal_akinbode",),
+        ("jessica_akinbode",),
+        ("olalanrewaju_dev",),
+        ("corrupted_record_test_   ",),  # Edge case spaces to test validators
+    ])
 
     conn.commit()
     conn.close()
-    print("Database environment completely provisioned and ready for pipeline activation!")
-
+    logger.info("Database simulation environment successfully initialized! ✅")
 
 if __name__ == "__main__":
-    init_db()
+    initialize_database()
