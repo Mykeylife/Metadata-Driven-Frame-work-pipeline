@@ -1,6 +1,6 @@
 import logging
 import sqlite3
-from typing import Dict, List, Set, Tuple
+from typing import Dict, List, Set, Tuple, Any
 
 logger = logging.getLogger("validators")
 
@@ -24,7 +24,6 @@ class DataQualityValidator:
             cursor = conn.cursor()
             
             for table_name, expected_columns in self.expected_schemas.items():
-                # Query table structural information metadata natively
                 cursor.execute(f"PRAGMA table_info({table_name});")
                 columns_meta: List[Tuple] = cursor.fetchall()
                 
@@ -33,10 +32,9 @@ class DataQualityValidator:
                     conn.close()
                     return False
                 
-                # Extract clean column name strings
-                actual_columns: Set[str] = {col[1] for col in columns_meta}
+                # Extract clean column name strings safely mapping the column name index
+                actual_columns: Set[str] = {col[1] for col in columns_meta if len(col) > 1}
                 
-                # Check for missing column dependencies
                 missing_columns: Set[str] = expected_columns - actual_columns
                 if missing_columns:
                     logger.error(
@@ -54,12 +52,11 @@ class DataQualityValidator:
             logger.error("Critical error during schema validation sweep: %s", str(e))
             return False
 
-    def validate_row_record(self, table_name: str, row_data: Dict[str, any]) -> bool:
+    def validate_row_record(self, table_name: str, row_data: Dict[str, Any]) -> bool:
         """Validates individual column payload integrity rules before row transformation steps."""
         if table_name not in self.expected_schemas:
             return True
             
-        # Ensure mandatory structural payload schemas match target domains exactly
         if table_name == "staging_users":
             username = row_data.get("username")
             if not username or str(username).strip() == "":
