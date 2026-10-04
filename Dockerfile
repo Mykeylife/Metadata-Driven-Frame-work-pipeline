@@ -1,44 +1,60 @@
-# Use an official lightweight Python runtime
-FROM python:3.11-slim
+# =====================================================================
+# Stage 1: Builder (Compiles requirements and down-selects production)
+# =====================================================================
+FROM python:3.11-slim AS builder
 
-# Set system environment variables to optimize Python runtime metrics inside containers
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
-ENV PIPELINE_DB_PATH="/app/metadata_control.db"
 
-# Set the working directory inside the container
-WORKDIR /app
+WORKDIR /build
 
-# Install system dependencies needed for compiling packages safely
+# Install build dependencies safely in the builder layer
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
-    sqlite3 \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Poetry package manager
 RUN pip install --no-cache-dir poetry
 
-# Copy dependency locks and configuration mappings
-COPY pyproject.toml poetry.lock* ./
+# Copy your standardized project configurations
+COPY pyproject.toml poetry.lock ./
 
-# Configure poetry to not create a separate virtual environment inside the container
-RUN poetry config virtualenvs.create false
+# Export strict production dependencies directly to requirements.txt (no dev groups)
+RUN poetry export --without-hashes --format=requirements.txt --output=requirements.txt
 
-# Install production dependencies cleanly without trying to install the project root package
-RUN poetry install --no-interaction --no-ansi --no-root
+# =====================================================================
+# Stage 2: Final Production Runtime (Slim and Secure)
+# =====================================================================
+FROM python:3.11-slim AS runner
 
-# Copy the rest of your core application workspace folders and files
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+ENV PIPELINE_DB_PATH="/app/metadata_control.db"
+
+WORKDIR /app
+
+# Install minimal runtime requirements only (SQLite)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    sqlite3 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy requirements from the builder stage
+COPY --from=builder /build/requirements.txt .
+
+# Install production packages cleanly
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy core workspace folders and orchestration modules
 COPY pipeline/ ./pipeline/
 COPY init_simulation_db.py orchestrator.py models.py ./
 
-# Create persistent directories to protect local log files and database state traces
+# Create pristine persistent directories for metadata state footprints
 RUN mkdir -p /app/logs
 
 # Declare mount volumes mapping boundaries for external state persistence
 VOLUME ["/app/logs"]
 
-# Expose an environmental port placeholder if needed for future API endpoints
 EXPOSE 8080
 
-# Bootstrap database schemas automatically upon container startup before activating orchestrator engine loops
+# Bootstrap database schemas and activate orchestrator natively 
 CMD ["sh", "-c", "python init_simulation_db.py && python orchestrator.py"]
