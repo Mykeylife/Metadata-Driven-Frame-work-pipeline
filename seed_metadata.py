@@ -25,6 +25,16 @@ TABLE_SCHEMAS = {
             is_active INTEGER DEFAULT 1
         );
     """,
+    "pipeline_execution_logs": """
+        CREATE TABLE IF NOT EXISTS pipeline_execution_logs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            run_id TEXT NOT NULL,
+            step_name TEXT NOT NULL,
+            status TEXT NOT NULL,
+            execution_time TEXT NOT NULL,
+            error_message TEXT
+        );
+    """,
     "staging_users": """
         CREATE TABLE IF NOT EXISTS staging_users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
