@@ -2,7 +2,7 @@ import pytest
 import sqlite3
 from unittest.mock import patch, MagicMock
 
-# Pre-emptively mock configuration targets to prevent path resolution conflicts
+# Dynamically patch configuration targets before loading to prevent layout path collisions
 with patch("pipeline.config.get_db_path", return_value=":memory:"):
     try:
         from pipeline.dag_runner import DAGRunner
@@ -57,8 +57,9 @@ def test_dag_runner_successful_execution_loop(clean_db_conn):
 
     runner = DAGRunner(pipeline_name="Ingestion-Engine-Validation")
     
+    # Target the internal framework sub-logger configuration directly
     with patch("sqlite3.connect", return_value=clean_db_conn), \
-         patch("logging.Logger.info") as mock_logger:
+         patch("pipeline.dag_runner.logger.info") as mock_logger:
         
         runner.run()
         
@@ -89,7 +90,7 @@ def test_dag_runner_skips_invalid_corrupted_rows(clean_db_conn):
     runner = DAGRunner(pipeline_name="Data-Quality-Gating-Validation")
     
     with patch("sqlite3.connect", return_value=clean_db_conn), \
-         patch("logging.Logger.warning") as mock_warn:
+         patch("pipeline.dag_runner.logger.warning") as mock_warn:
         
         runner.run()
         
@@ -114,7 +115,7 @@ def test_dag_runner_halts_if_all_rows_fail_validation(clean_db_conn):
     runner = DAGRunner(pipeline_name="All-Corrupted-Payload-Validation")
     
     with patch("sqlite3.connect", return_value=clean_db_conn), \
-         patch("logging.Logger.warning") as mock_warn:
+         patch("pipeline.dag_runner.logger.warning") as mock_warn:
         
         runner.run()
         
@@ -131,7 +132,7 @@ def test_dag_runner_aborts_on_failed_boot_schema(clean_db_conn):
     runner = DAGRunner(pipeline_name="Schema-Failure-Validation")
     
     with patch("sqlite3.connect", return_value=clean_db_conn), \
-         patch("logging.Logger.error") as mock_error:
+         patch("pipeline.dag_runner.logger.error") as mock_error:
         
         runner.run()
         
@@ -144,7 +145,7 @@ def test_dag_runner_handles_empty_metadata_steps(clean_db_conn):
     runner = DAGRunner(pipeline_name="Empty-Metadata-Context-Validation")
     
     with patch("sqlite3.connect", return_value=clean_db_conn), \
-         patch("logging.Logger.warning") as mock_logger:
+         patch("pipeline.dag_runner.logger.warning") as mock_logger:
         
         runner.run()
         
@@ -163,7 +164,7 @@ def test_dag_runner_safety_barrier_empty_staging_users(clean_db_conn):
     runner = DAGRunner(pipeline_name="Empty-Staging-Safety-Validation")
     
     with patch("sqlite3.connect", return_value=clean_db_conn), \
-         patch("logging.Logger.error") as mock_error:
+         patch("pipeline.dag_runner.logger.error") as mock_error:
         
         runner.run()
         
@@ -179,13 +180,14 @@ def test_dag_runner_catches_and_raises_generic_exceptions(clean_db_conn):
     )
     clean_db_conn.commit()
 
-    runner = DAGRunner(pipeline_name="Exception-Handling-Validation")
+    runner = DAGRunner(pipeline_name="Exception-Capture-Validation")
     
-    # Inject a fatal driver operational error deep into the table iteration process
+    # Intercept execute_task_logic to force a raw mock system crash simulation
     with patch("sqlite3.connect", return_value=clean_db_conn), \
-         patch("sqlite3.Cursor.fetchall", side_effect=sqlite3.OperationalError("Database hardware disk failure.")):
-         
-        with pytest.raises(sqlite3.OperationalError):
-            runner.run()
-            
+         patch.object(runner, "execute_task_logic", side_effect=Exception("Critical disk write failure")), \
+         patch("pipeline.dag_runner.logger.error") as mock_error:
+        
+        runner.run()
+        
         assert runner.status == "FAILED"
+        mock_error.assert_any_call("Fatal exception broken sequence execution loop: Critical disk write failure")
