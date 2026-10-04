@@ -8,7 +8,6 @@ package-mode = false
 
 [tool.poetry.dependencies]
 python = "^3.11"
-# Add your core runtime packages here so Poetry handles them cleanly
 pydantic = "^2.0"
 requests = "^2.31.0" 
 
@@ -52,8 +51,8 @@ ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
-testpaths = ["tests"]
-addopts = "-ra -q --cov=pipeline --cov-report=term-missing"
+testpaths = ["tests", "pipeline/tests"]
+addopts = "-ra -q --cov=. --cov-report=term-missing"
 
 [tool.poetry.scripts]
 pipeline = "orchestrator:main"
