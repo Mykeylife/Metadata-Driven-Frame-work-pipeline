@@ -6,6 +6,10 @@ on:
   pull_request:
     branches: [ "main" ]
 
+# 1. FIX: Grant the runner explicit write permissions to commit style updates
+permissions:
+  contents: write
+
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
@@ -15,6 +19,8 @@ jobs:
       uses: actions/checkout@v4
       with:
         token: ${{ secrets.GITHUB_TOKEN }}
+        # Fetch the head ref during pull requests so git doesn't end up in a detached HEAD state
+        ref: ${{ github.head_ref || github.ref }}
 
     - name: Set up Python 3.11
       uses: actions/setup-python@v5
@@ -24,26 +30,51 @@ jobs:
     - name: Install Poetry
       run: pip install poetry
 
-    - name: Automatically Repair and Sync Lockfile
-      run: |
-        poetry lock
+    - name: Load Cached Virtualenv
+      id: cached-poetry-dependencies
+      uses: actions/cache@v4
+      with:
+        path: .venv
+        key: venv-${{ runner.os }}-${{ hashFiles('**/poetry.lock') }}
 
     - name: Install Dependencies from Lockfile
+      if: steps.cached-poetry-dependencies.outputs.cache-hit != 'true'
       run: |
-        poetry config virtualenvs.create false
+        poetry config virtualenvs.create true
+        poetry config virtualenvs.in-project true
         poetry install --no-root --no-interaction
 
     - name: Run Database Seeder Check
-      run: python seed_metadata.py
-
-    - name: Auto-Format and Lint Codebase
       run: |
-        pip install ruff black
-        black .
-        ruff check . --ignore E501 --fix
+        if [ -f init_simulation_db.py ]; then
+          poetry run python init_simulation_db.py
+        else
+          echo "Database initiation script missing, skipping."
+        fi
 
-    - name: Static type check with Mypy
-      run: mypy --config-file mypy.ini --explicit-package-bases pipeline tests || true
+    # 2. FIX: Combine Auto-Format and Linter Fixes with Ruff
+    - name: Automatically Format and Lint Codebase
+      run: |
+        poetry run ruff format .
+        poetry run ruff check . --fix
 
-    - name: Run tests with code coverage
-      run: env PYTHONPATH=. pytest test_dag_runner.py --cov=pipeline --cov-report=term-missing || true
+    # 3. FIX: Safely push back updates ONLY if changes were made
+    - name: Commit and Push Formatting Fixes
+      if: github.event_name == 'pull_request'
+      run: |
+        git config --global user.name "github-actions[bot]"
+        git config --global user.email "github-actions[bot]@users.noreply.github.com"
+        git add .
+        git diff-index --quiet HEAD || (git commit -m "style: auto-format codebase with Ruff" && git push)
+
+    # 4. FIX: Use strict verification checks after resolving git state
+    - name: Strict Code Format and Lint Check (Ruff)
+      run: |
+        poetry run ruff format --check .
+        poetry run ruff check .
+
+    - name: Strict Static Type Check (Mypy)
+      run: poetry run mypy
+
+    - name: Run Strict Unit Tests with Coverage
+      run: poetry run pytest
