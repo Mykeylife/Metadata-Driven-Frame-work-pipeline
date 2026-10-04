@@ -9,14 +9,6 @@ python-versions = ">=3.8"
 files = []
 
 [[package]]
-name = "flake8"
-version = "7.0.0"
-description = "the modular source code checker: pep8 pyflakes and co"
-optional = false
-python-versions = ">=3.8.1"
-files = []
-
-[[package]]
 name = "mypy"
 version = "1.11.2"
 description = "Optional static typing for Python"
@@ -40,7 +32,31 @@ optional = false
 python-versions = ">=3.8"
 files = []
 
+[[package]]
+name = "pydantic"
+version = "2.6.4"
+description = "Data validation using Python type hints."
+optional = false
+python-versions = ">=3.8"
+files = []
+
+[[package]]
+name = "requests"
+version = "2.31.0"
+description = "Python HTTP for Humans."
+optional = false
+python-versions = ">=3.7"
+files = []
+
+[[package]]
+name = "ruff"
+version = "0.6.0"
+description = "An extremely fast Python linter and code formatter, written in Rust."
+optional = false
+python-versions = ">=3.7"
+files = []
+
 [metadata]
 lock-version = "2.0"
 python-versions = ">=3.11"
-content-hash = "c18685121bfe85f1cda8118ab4889c1da738ba51666fe2f309a473200ff3e4b7"
+content-hash = "40be15082d0295843b0d771e7a56fb2cb276d8b9e67ca0709f6e5227d8db1421"
