@@ -1,15 +1,21 @@
 import logging
 import sqlite3
-from typing import List, Tuple
+import sys
+from typing import TYPE_CHECKING, List, Tuple
 
-try:
-    # Handles execution context when run from the repository root directory
+# Prevent Mypy from identifying duplicate definitions during structural analysis
+if TYPE_CHECKING:
     from pipeline.config import get_db_path
     from pipeline.dag_runner import DAGRunner
-except ModuleNotFoundError:
-    # Handles direct execution or inner package context during absolute paths
-    from config import get_db_path
-    from dag_runner import DAGRunner
+else:
+    try:
+        # Handles execution context when run from the repository root directory
+        from pipeline.config import get_db_path
+        from pipeline.dag_runner import DAGRunner
+    except ModuleNotFoundError:
+        # Handles direct execution or inner package context during absolute paths
+        from config import get_db_path
+        from dag_runner import DAGRunner
 
 # Configure structured production-ready terminal logging framework
 logging.basicConfig(
