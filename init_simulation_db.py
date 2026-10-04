@@ -35,6 +35,20 @@ def initialize_database() -> None:
         );
     """)
 
+    # NEW: Centralized Local Audit Store Table (Telemetry Metrics Warehouse)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS pipeline_execution_logs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            run_id TEXT NOT NULL,
+            step_name TEXT NOT NULL,
+            status TEXT NOT NULL,
+            execution_time TEXT NOT NULL,
+            peak_memory_kb INTEGER DEFAULT 0,
+            cpu_time_seconds REAL DEFAULT 0.0,
+            error_message TEXT
+        );
+    """)
+
     # 2. Create Target Data Tables
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS staging_users (
