@@ -1,10 +1,10 @@
 import sqlite3
 import pytest
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 
-# We mock the configuration paths before importing the production modules to avoid path collisions
-with patch("pipeline.config.get_db_path", return_value=":memory:"):
-    from pipeline.orchestrator import fetch_active_steps, execute_pipeline
+# Dynamically patch before loading to guarantee path collisions are prevented across structures
+with patch("orchestrator.get_db_path", return_value=":memory:"):
+    from orchestrator import fetch_active_steps, execute_pipeline
 
 @pytest.fixture
 def memory_db_conn():
@@ -39,13 +39,12 @@ def test_fetch_active_steps_with_data(memory_db_conn):
     )
     memory_db_conn.commit()
 
-    # Mock get_db_path dynamically to safely inject our in-memory connection
-    with patch("pipeline.orchestrator.get_db_path", return_value=":memory:"), \
+    # Match the mock target to the root scope handling execution
+    with patch("orchestrator.get_db_path", return_value=":memory:"), \
          patch("sqlite3.connect", return_value=memory_db_conn):
         
         active_steps = fetch_active_steps()
         
-        # Assertions to verify filtering and sorting logic
         assert len(active_steps) == 2
         # Verify strict order sorting: "Process Analytics" (Order 10) must run before "Extract Users" (Order 20)
         assert active_steps[0][1] == "Process Analytics"
@@ -53,9 +52,9 @@ def test_fetch_active_steps_with_data(memory_db_conn):
 
 def test_execute_pipeline_empty_metadata(memory_db_conn):
     """Ensures the orchestration engine exits gracefully if no active rows exist."""
-    with patch("pipeline.orchestrator.get_db_path", return_value=":memory:"), \
+    with patch("orchestrator.get_db_path", return_value=":memory:"), \
          patch("sqlite3.connect", return_value=memory_db_conn), \
-         patch("logging.Logger.warning") as mock_warn:
+         patch("orchestrator.logger.warning") as mock_warn:
          
         execute_pipeline()
         mock_warn.assert_called_with("No active steps found in control tables. Exiting engine flow safely.")
@@ -69,9 +68,14 @@ def test_execute_pipeline_successful_run(memory_db_conn):
     )
     memory_db_conn.commit()
 
-    with patch("pipeline.orchestrator.get_db_path", return_value=":memory:"), \
+    # Mock DAGRunner to simulate environment execution footprints without needing actual modules
+    mock_runner = MagicMock()
+    mock_runner.status = "SUCCESS"
+
+    with patch("orchestrator.get_db_path", return_value=":memory:"), \
          patch("sqlite3.connect", return_value=memory_db_conn), \
-         patch("logging.Logger.info") as mock_info:
+         patch("orchestrator.DAGRunner", return_value=mock_runner), \
+         patch("orchestrator.logger.info") as mock_info:
          
         execute_pipeline()
         # Ensure our simulated complete success tracking message was logged safely
