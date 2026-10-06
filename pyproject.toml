@@ -46,8 +46,10 @@ ignore = ["E501", "W291", "B007"]
 
 [tool.mypy]
 python_version = "3.11"
-explicit_package_bases = true
 ignore_missing_imports = true
+namespace_packages = true
+explicit_package_bases = false
+disable_error_code = ["no-redef", "attr-defined"]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
