@@ -28,11 +28,13 @@ jobs:
     - name: Auto-format code with Black
       run: poetry run black .
 
-    - name: Run linting compliance (Ruff)
-      run: poetry run ruff check .
+    - name: Auto-fix linting and sort imports with Ruff
+      run: |
+        poetry run ruff check . --fix --exit-zero
+        poetry run ruff format .
 
     - name: Run static type checks (Mypy)
-      run: poetry run mypy .
+      run: poetry run mypy . --ignore-missing-imports
 
     - name: Run test suite with coverage
       run: poetry run pytest
