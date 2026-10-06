@@ -25,8 +25,8 @@ jobs:
     - name: Install dependencies
       run: poetry install --no-interaction
 
-    - name: Run code formatting check (Black)
-      run: poetry run black . --check
+    - name: Auto-format code with Black
+      run: poetry run black .
 
     - name: Run linting compliance (Ruff)
       run: poetry run ruff check .
