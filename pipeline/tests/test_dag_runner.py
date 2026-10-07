@@ -59,6 +59,8 @@ def test_dag_runner_halts_if_all_rows_fail_validation(clean_db_conn):
         runner.run()
         assert runner.status == "SUCCESS"
         
-        # Pull all recorded warning messages out dynamically to ensure a match passes regardless of pluralization or order
-        log_messages = [call[0][0] for call in mock_warn.call_args_list if call[0]]
-        assert any("No valid rows passed the data quality" in msg for msg in log_messages), f"Target data quality log not found in: {log_messages}"
+        # Safely extract positional arguments from mock calls as string sequences
+        called_messages = [str(args[0]) for args, kwargs in mock_warn.call_args_list if args]
+        
+        # Verify the warning contains our threshold/thresholds substring smoothly
+        assert any("No valid rows passed the data quality" in msg for msg in called_messages), f"Log not found in: {called_messages}"
