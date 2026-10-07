@@ -22,6 +22,10 @@ jobs:
     - name: Install Poetry
       run: pipx install poetry
 
+    - name: Automatically Repair and Sync Lockfile Hash
+      # Forces Poetry to re-align the metadata content-hash with pyproject.toml dynamically
+      run: poetry lock --no-update
+
     - name: Install dependencies
       run: poetry install --no-interaction
 
