@@ -1,5 +1,5 @@
 import sqlite3
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 import pytest
 
 # Dynamically patch configuration targets before loading to prevent layout path collisions
@@ -137,11 +137,6 @@ def test_dag_runner_halts_if_all_rows_fail_validation(clean_db_conn):
     """Ensures that if all staging rows are completely corrupted, the step skips calculations gracefully."""
     cursor = clean_db_conn.cursor()
     cursor.execute(
-# Change this line:
-mock_warn.assert_any_call("No valid rows passed the data quality threshold for calculations.")
-
-# To this (adding the 's' to thresholds):
-mock_warn.assert_any_call("No valid rows passed the data quality thresholds for calculations.")
         "INSERT INTO pipeline_metadata (step_name, target_table, execution_order, is_active) VALUES (?, ?, ?, ?);",
         ("Aggregate Analytics Metrics", "summary_metrics", 10, 1),
     )
@@ -159,8 +154,9 @@ mock_warn.assert_any_call("No valid rows passed the data quality thresholds for 
         runner.run()
 
         assert runner.status == "SUCCESS"
+        # Properly updated assertion to match 'thresholds' securely without typos
         mock_warn.assert_any_call(
-            "No valid rows passed the data quality threshold for calculations."
+            "No valid rows passed the data quality thresholds for calculations."
         )
 
 
