@@ -23,7 +23,7 @@ jobs:
       run: pipx install poetry
 
     - name: Automatically Repair and Sync Lockfile Hash
-      run: poetry lock --no-hashes
+      run: poetry lock
 
     - name: Install dependencies
       run: poetry install --no-interaction
