@@ -109,7 +109,7 @@ def test_dag_runner_skips_invalid_corrupted_rows(clean_db_conn):
         )
 
 
-def test_dag_runner_halts_if_all_rows_fail_validation(clean_db_conn):
+def test_dag_runner_halts_if_all_rows_fail_validation(clean_db_conn, caplog):
     """Ensures that completely corrupted datasets abort metrics calculation safely and log explicitly."""
     cursor = clean_db_conn.cursor()
     cursor.execute(
@@ -123,26 +123,17 @@ def test_dag_runner_halts_if_all_rows_fail_validation(clean_db_conn):
 
     runner = DAGRunner(pipeline_name="All-Corrupted-Payload-Validation")
 
-    # Clean list spy to capture warning logs directly from the logging framework
-    log_messages = []
-
-    def spy_warning(msg, *args, **kwargs):
-        log_messages.append(str(msg))
-
-    # Target the root logger for the pipeline package to intercept all warnings seamlessly
-    target_logger = logging.getLogger("pipeline")
-    
-    with patch("sqlite3.connect", return_value=clean_db_conn), \
-         patch.object(target_logger, "warning", side_effect=spy_warning):
-
-        runner.run()
+    # Set caplog level to intercept WARNING messages securely
+    with caplog.at_level(logging.WARNING):
+        with patch("sqlite3.connect", return_value=clean_db_conn):
+            runner.run()
 
         assert runner.status == "SUCCESS"
-        # Verify the descriptive warning was securely trapped
+        # Assert against pytest's native captured log text streams cleanly
         assert any(
-            "No valid rows passed the data quality" in msg
-            for msg in log_messages
-        ), f"Expected statement absent from captured streams: {log_messages}"
+            "No valid rows passed the data quality" in record.message
+            for record in caplog.records
+        ), f"Expected statement absent from captured streams: {[r.message for r in caplog.records]}"
 
 
 def test_dag_runner_aborts_on_failed_boot_schema(clean_db_conn):
