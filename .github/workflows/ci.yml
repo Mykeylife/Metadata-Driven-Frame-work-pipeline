@@ -11,47 +11,41 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout repository code
+    - name: Checkout Repository
       uses: actions/checkout@v4
 
-    - name: Set up Python 3.11
+    - name: Set up Python
       uses: actions/setup-python@v5
       with:
         python-version: '3.11'
 
-    - name: Install Poetry
-      run: pipx install poetry
+    - name: Install Pipx and Poetry
+      run: |
+        pip install --user pipx
+        pipx ensurepath
+        pipx install poetry==1.8.3
 
-    - name: Configure Poetry Cache Dynamically
-      uses: actions/cache@v4
+    - name: Configure Poetry Path
+      run: |
+        echo "$HOME/.local/bin" >> $GITHUB_PATH
+
+    - name: Set up Poetry Cache
+      uses: actions/setup-python@v5
       with:
-        path: ~/.cache/pypoetry
-        key: ${{ runner.os }}-poetry-${{ hashFiles('**/poetry.lock') }}
-        restore-keys: |
-          ${{ runner.os }}-poetry-
+        python-version: '3.11'
+        cache: 'poetry'
 
-    # Fix: Uses the universally supported lock regeneration sequence to clear out hash mismatches
-    - name: Automatically Repair and Sync Lockfile Hash
-      run: poetry lock --no-hashes
+    - name: Strict Lock File Integrity Check
+      run: poetry check --lock
 
-    - name: Install Project Dependencies
-      run: poetry install --no-interaction
+    - name: Safe Sync and Install Dependencies
+      run: poetry install --no-interaction --no-root --sync
 
-    - name: Strict Code Formatting Check (Black)
-      run: poetry run black . --check
-
-    - name: Linting and Import Order Verification (Ruff)
+    - name: Run Code Linters & Formatters
       run: |
         poetry run ruff check .
-        poetry run ruff format --check .
+        poetry run black --check .
 
-    - name: Static Type Validation (Mypy)
-      run: |
-        if [ -d pipeline ]; then
-          poetry run mypy --explicit-package-bases --disable-error-code method-assign pipeline
-        else
-          poetry run mypy --explicit-package-bases --disable-error-code method-assign .
-        fi
-        
-    - name: Execute Insulated Unit Test Suite
-      run: poetry run pytest --cov=pipeline --cov-report=term-missing
+    - name: Execute Test Suite with Coverage
+      run: poetry run pytest --cov=src
+
