@@ -36,7 +36,9 @@ jobs:
         cache: 'poetry'
 
     - name: Strict Lock File Integrity Check
-      run: poetry check --lock
+      run: |
+        poetry lock --no-update
+        poetry check --lock
 
     - name: Safe Sync and Install Dependencies
       run: poetry install --no-interaction --no-root --sync
