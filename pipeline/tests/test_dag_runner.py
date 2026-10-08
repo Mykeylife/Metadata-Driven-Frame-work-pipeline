@@ -1,4 +1,5 @@
 import sqlite3
+import logging
 from unittest.mock import MagicMock, patch
 import pytest
 
@@ -122,20 +123,22 @@ def test_dag_runner_halts_if_all_rows_fail_validation(clean_db_conn):
 
     runner = DAGRunner(pipeline_name="All-Corrupted-Payload-Validation")
 
-    # A clear list mock spy to securely capture message arguments natively without runtime collisions
+    # Clean list spy to capture warning logs directly from the logging framework
     log_messages = []
 
     def spy_warning(msg, *args, **kwargs):
         log_messages.append(str(msg))
 
-    with patch("sqlite3.connect", return_value=clean_db_conn), patch(
-        "pipeline.dag_runner.logger.warning", side_effect=spy_warning
-    ):
+    # Target the root logger for the pipeline package to intercept all warnings seamlessly
+    target_logger = logging.getLogger("pipeline")
+    
+    with patch("sqlite3.connect", return_value=clean_db_conn), \
+         patch.object(target_logger, "warning", side_effect=spy_warning):
 
         runner.run()
 
         assert runner.status == "SUCCESS"
-        # Strict substring verification ensuring the proper diagnostic warning was logged cleanly
+        # Verify the descriptive warning was securely trapped
         assert any(
             "No valid rows passed the data quality" in msg
             for msg in log_messages
