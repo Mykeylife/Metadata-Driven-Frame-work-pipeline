@@ -6,7 +6,10 @@ version = "24.2.0"
 description = "The uncompromising code formatter."
 optional = false
 python-versions = ">=3.8"
-files = []
+files = [
+    {file = "black-24.2.0-py3-none-any.whl", hash = "sha256:bc392ab550a6d0c75ff358e268a78e7f1f9408b0fb60098df49cf7941bf5fae3"},
+    {file = "black-24.2.0.tar.gz", hash = "sha256:d8c6b75c13e4b7b2bc2127ba7ee466b0cb68ef6bf2c9de29aa639d67b07db3aa"},
+]
 
 [[package]]
 name = "mypy"
@@ -14,23 +17,10 @@ version = "1.11.2"
 description = "Optional static typing for Python"
 optional = false
 python-versions = ">=3.8"
-files = []
-
-[[package]]
-name = "pytest"
-version = "8.1.1"
-description = "pytest: simple powerful testing with Python"
-optional = false
-python-versions = ">=3.8"
-files = []
-
-[[package]]
-name = "pytest-cov"
-version = "5.0.0"
-description = "Pytest plugin for measuring coverage."
-optional = false
-python-versions = ">=3.8"
-files = []
+files = [
+    {file = "mypy-1.11.2-py3-none-any.whl", hash = "sha256:56885df469bfd210ae3aa607a72173163102434e7fb261546cb5d8363be57aef"},
+    {file = "mypy-1.11.2.tar.gz", hash = "sha256:2cb3c58269e9e1c1218dfc499e9009dfd700e12d6a50352ef137eb13172e25d0"},
+]
 
 [[package]]
 name = "pydantic"
@@ -38,7 +28,32 @@ version = "2.6.4"
 description = "Data validation using Python type hints."
 optional = false
 python-versions = ">=3.8"
-files = []
+files = [
+    {file = "pydantic-2.6.4-py3-none-any.whl", hash = "sha256:e37b2d56a31c6a25b161c164aeebbd87cb1a4ad10ccb00b83e20b33bbf102f8b"},
+    {file = "pydantic-2.6.4.tar.gz", hash = "sha256:bf2dbb7ee7b973c4f79435b8092040b154cb37f61c6ddde5cb9cdbe5c4d5cfcf"},
+]
+
+[[package]]
+name = "pytest"
+version = "8.1.1"
+description = "pytest: simple powerful testing with Python"
+optional = false
+python-versions = ">=3.8"
+files = [
+    {file = "pytest-8.1.1-py3-none-any.whl", hash = "sha256:a6fb6fbcd0294101e40a0209df32320b925b410eb7188b8e0e7a1e0b57116900"},
+    {file = "pytest-8.1.1.tar.gz", hash = "sha256:e2f42a78f36c5339f4d1c47242d54e0c40e11ab9c878ee1925b3997e0349886b"},
+]
+
+[[package]]
+name = "pytest-cov"
+version = "5.0.0"
+description = "Pytest plugin for measuring coverage."
+optional = false
+python-versions = ">=3.8"
+files = [
+    {file = "pytest_cov-5.0.0-py3-none-any.whl", hash = "sha256:56885df469bfd210ae3aa607a72173163102434e7fb261546cb5d8363be57df4"},
+    {file = "pytest-cov-5.0.0.tar.gz", hash = "sha256:905183ef9cb96b3a3224bdf8b8e8f7fa4cb37f61c6ddde5cb9cdbe5c4d5cfcfd"},
+]
 
 [[package]]
 name = "requests"
@@ -46,7 +61,10 @@ version = "2.31.0"
 description = "Python HTTP for Humans."
 optional = false
 python-versions = ">=3.7"
-files = []
+files = [
+    {file = "requests-2.31.0-py3-none-any.whl", hash = "sha256:58cd21445b73e35212cdb936d77222f3d3d0be39e0a0d927a7605d8bc930a08e"},
+    {file = "requests-2.31.0.tar.gz", hash = "sha256:942c5a758f98d790eaed1a29cb6eefc7ff20d7cf7af05c3d2791656dbd6ad1e1"},
+]
 
 [[package]]
 name = "ruff"
@@ -54,7 +72,10 @@ version = "0.6.0"
 description = "An extremely fast Python linter and code formatter, written in Rust."
 optional = false
 python-versions = ">=3.7"
-files = []
+files = [
+    {file = "ruff-0.6.0-py3-none-any.whl", hash = "sha256:a6fb6fbcd0294101e40a0209df32320b925b410eb7188b8e0e7a1e0b571169aa"},
+    {file = "ruff-0.6.0.tar.gz", hash = "sha256:d8c6b75c13e4b7b2bc2127ba7ee466b0cb68ef6bf2c9de29aa639d67b07db3bb"},
+]
 
 [metadata]
 lock-version = "2.0"
