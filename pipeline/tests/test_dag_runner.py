@@ -109,7 +109,7 @@ def test_dag_runner_skips_invalid_corrupted_rows(clean_db_conn):
         )
 
 
-def test_dag_runner_halts_if_all_rows_fail_validation(clean_db_conn, caplog):
+def test_dag_runner_halts_if_all_rows_fail_validation(clean_db_conn):
     """Ensures that completely corrupted datasets abort metrics calculation safely and log explicitly."""
     cursor = clean_db_conn.cursor()
     cursor.execute(
@@ -123,17 +123,34 @@ def test_dag_runner_halts_if_all_rows_fail_validation(clean_db_conn, caplog):
 
     runner = DAGRunner(pipeline_name="All-Corrupted-Payload-Validation")
 
-    # Set caplog level to intercept WARNING messages securely
-    with caplog.at_level(logging.WARNING):
+    # Target the production engine module logger directly
+    prod_logger = logging.getLogger("pipeline.dag_runner")
+    
+    # Set the logging level to intercept WARNING level streams
+    prod_logger.setLevel(logging.WARNING)
+    
+    # Establish a local log collection list and stream handler
+    log_messages = []
+    class ListLogHandler(logging.Handler):
+        def emit(self, record):
+            log_messages.append(record.getMessage())
+
+    handler = ListLogHandler()
+    prod_logger.addHandler(handler)
+
+    try:
         with patch("sqlite3.connect", return_value=clean_db_conn):
             runner.run()
+    finally:
+        # Cleanly dismantle the handler to avoid leakage across subsequent runs
+        prod_logger.removeHandler(handler)
 
-        assert runner.status == "SUCCESS"
-        # Assert against pytest's native captured log text streams cleanly
-        assert any(
-            "No valid rows passed the data quality" in record.message
-            for record in caplog.records
-        ), f"Expected statement absent from captured streams: {[r.message for r in caplog.records]}"
+    assert runner.status == "SUCCESS"
+    # Ensure the warning text is captured properly from the specific module logger channel
+    assert any(
+        "No valid rows passed the data quality" in msg
+        for msg in log_messages
+    ), f"Expected statement absent from captured streams: {log_messages}"
 
 
 def test_dag_runner_aborts_on_failed_boot_schema(clean_db_conn):
@@ -175,3 +192,4 @@ def test_dag_runner_safety_barrier_empty_staging_users(clean_db_conn):
         mock_error.assert_any_call(
             "Safety guard triggered: 'staging_users' is completely empty. Halting pipeline."
         )
+
