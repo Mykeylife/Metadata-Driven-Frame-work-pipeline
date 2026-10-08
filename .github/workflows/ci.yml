@@ -35,6 +35,13 @@ jobs:
         python-version: '3.11'
         cache: 'poetry'
 
+    - name: Run Code Linters & Formatters
+      run: |
+        # Automatically sort imports and fix clean-code violations safely
+        poetry run ruff check . --fix
+        # Ensure the codebase complies fully with formatting standards
+        poetry run black . --check        
+
     - name: Strict Lock File Integrity Check
       run: |
         poetry lock --no-update
