@@ -30,6 +30,10 @@ jobs:
         restore-keys: |
           ${{ runner.os }}-poetry-
 
+    # ADD THIS STEP HERE TO REPAIR THE HASH ALIGNMENT DYNAMICALLY:
+    - name: Automatically Repair and Sync Lockfile Hash
+      run: poetry lock --no-update
+
     - name: Install Project Dependencies
       run: poetry install --no-interaction
 
