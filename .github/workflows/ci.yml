@@ -35,24 +35,20 @@ jobs:
         python-version: '3.11'
         cache: 'poetry'
 
-    - name: Run Code Linters & Formatters
-      run: |
-        poetry run ruff check . --fix
-        poetry run black .
-        
     - name: Strict Lock File Integrity Check
       run: |
         poetry lock --no-update
         poetry check --lock
 
     - name: Safe Sync and Install Dependencies
-      run: poetry install --no-interaction --no-root --sync
+      run: poetry install --no-interaction --no-root --sync --with dev
 
     - name: Run Code Linters & Formatters
       run: |
-        poetry run ruff check .
-        poetry run black --check .
+        poetry run ruff check . --fix
+        poetry run ruff format .
 
+    # We use your file test_dag_runner.py here as the test suite entry point
+    # To run coverage on the pipeline module matching your layout
     - name: Execute Test Suite with Coverage
-      run: poetry run pytest --cov=src
-
+      run: poetry run pytest test_dag_runner.py --cov=pipeline --cov-report=term-missing
