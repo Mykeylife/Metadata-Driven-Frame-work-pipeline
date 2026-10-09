@@ -45,10 +45,8 @@ jobs:
 
     - name: Run Code Linters & Formatters
       run: |
-        poetry run ruff check . --fix
+        poetry run ruff check . --fix --unsafe-fixes
         poetry run ruff format .
 
-    # We use your file test_dag_runner.py here as the test suite entry point
-    # To run coverage on the pipeline module matching your layout
     - name: Execute Test Suite with Coverage
       run: poetry run pytest test_dag_runner.py --cov=pipeline --cov-report=term-missing
