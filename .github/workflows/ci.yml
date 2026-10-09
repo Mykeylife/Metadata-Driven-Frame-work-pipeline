@@ -49,4 +49,6 @@ jobs:
         poetry run ruff format .
 
     - name: Execute Test Suite with Coverage
-      run: poetry run pytest test_dag_runner.py --cov=pipeline --cov-report=term-missing
+      env:
+        PYTHONPATH: .
+      run: poetry run pytest tests/test_dag_runner.py --cov=pipeline --cov-report=term-missing
