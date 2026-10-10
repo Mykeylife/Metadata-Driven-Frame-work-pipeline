@@ -15,7 +15,21 @@ def run_pipeline(connection: sqlite3.Connection) -> None:
         start_time = time.perf_counter()
         try:
             # Process your ingestion steps here dynamically...
-            
+
+            # Change these imports:
+from pipeline.config import get_db_path
+from pipeline.validators import DataQualityValidator
+from pipeline.logging_config import JsonStructuredFormatter
+from pipeline import repository
+from pipeline import kpi_calculator
+
+# To these safe relative imports:
+from .config import get_db_path
+from .validators import DataQualityValidator
+from .logging_config import JsonStructuredFormatter
+from . import repository
+from . import kpi_calculator
+
             repository.log_pipeline_execution(
                 cursor, run_id, step_name, "SUCCESS", time.perf_counter() - start_time
             )
