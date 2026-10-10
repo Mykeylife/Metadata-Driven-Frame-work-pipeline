@@ -1,49 +1,52 @@
+"""Unit tests for validating the active TaskCapacityManager batching engine."""
+
 import pytest
-import time
-from unittest.mock import patch, MagicMock
+import sqlite3
+from pipeline.task_manager import TaskCapacityManager  # Correct, verified class name
 
-# Attempt to load the module context safely based on runner execution pathing
-try:
-    from pipeline.task_manager import TaskManager
-except ImportError:
-    try:
-        from task_manager import TaskManager
-    except ImportError:
-        # Fallback placeholder to maintain a 100% stable, compilable mock target if file is moving
-        class TaskManager:
-            def __init__(self, task_name="default"):
-                self.task_name = task_name
-                self.status = "PENDING"
-                self.start_time = None
-            def start_task(self):
-                self.status = "RUNNING"
-                self.start_time = time.time()
-            def complete_task(self):
-                self.status = "SUCCESS"
-                return "00:00:01"
+@pytest.fixture
+def mock_db_connection():
+    """Initializes an in-memory SQLite control database for isolated unit testing."""
+    conn = sqlite3.connect(":memory:")
+    cursor = conn.cursor()
+    # Create the control table required by TaskCapacityManager
+    cursor.execute("""
+        CREATE TABLE pipeline_metadata (
+            step_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            step_name TEXT NOT NULL UNIQUE,
+            target_table TEXT NOT NULL,
+            execution_order INTEGER NOT NULL,
+            is_active INTEGER DEFAULT 1
+        )
+    """)
+    # Seed mock records for processing loops
+    cursor.executemany("""
+        INSERT INTO pipeline_metadata (step_name, target_table, execution_order, is_active)
+        VALUES (?, ?, ?, ?)
+    """, [
+        ("staging_users", "staging_users", 1, 1),
+        ("analytics_kpis", "analytics_kpis", 2, 1),
+        ("disabled_step", "disabled_table", 3, 0)
+    ])
+    conn.commit()
+    yield conn
+    conn.close()
 
-def test_task_manager_initialization():
-    """Validates that a new task initializes with clean pending properties."""
-    manager = TaskManager(task_name="Ingestion_Sweep")
-    assert manager.task_name == "Ingestion_Sweep"
-    assert manager.status == "PENDING"
-
-def test_task_manager_start_lifecycle():
-    """Ensures starting a task transitions status correctly and snapshots timestamps."""
-    manager = TaskManager(task_name="KPI_Calculation")
-    manager.start_task()
-    assert manager.status == "RUNNING"
-    assert manager.start_time is not None
-
-def test_task_manager_duration_formatting():
-    """Verifies that completing a task calculates and saves duration metrics as a formatted string."""
-    manager = TaskManager(task_name="Analytical_Gating")
-    manager.start_task()
+def test_task_capacity_manager_registration(mock_db_connection):
+    """Asserts that TaskCapacityManager extracts only active operational pipeline steps."""
+    manager = TaskCapacityManager(db_connection=mock_db_connection)
+    active_steps = manager.get_active_steps()
     
-    # Mocking time slightly forward to assert live duration delta tracking mechanics
-    with patch("time.time", side_effect=[time.time(), time.time() + 5]):
-        duration_string = manager.complete_task()
-        
-        assert manager.status == "SUCCESS"
-        assert duration_string is not None
-        assert isinstance(duration_string, str)
+    # Validation constraints: step 1 and step 2 must load; disabled_step must be dropped
+    assert len(active_steps) == 2
+    assert "staging_users" in active_steps
+    assert "analytics_kpis" in active_steps
+    assert "disabled_step" not in active_steps
+
+def test_task_capacity_manager_execution_order(mock_db_connection):
+    """Verifies that the orchestrator loop processes targets sequentially by order index."""
+    manager = TaskCapacityManager(db_connection=mock_db_connection)
+    ordered_steps = manager.get_ordered_execution_steps()
+    
+    assert ordered_steps[0] == "staging_users"   # execution_order = 1
+    assert ordered_steps[1] == "analytics_kpis"   # execution_order = 2
