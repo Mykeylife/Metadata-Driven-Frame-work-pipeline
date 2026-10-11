@@ -1,94 +1,29 @@
 # Metadata-Driven Framework Pipeline
 
-A local pipeline orchestration engine built in Python with an offline SQLite metadata store, metrics generation, and live telemetry.
+A scalable local pipeline orchestration engine built in Python featuring an offline SQLite metadata control store, metrics generation, and live execution telemetry.
 
-For the complete project documentation, installation instructions, database schemas, and deployment options, please visit the {Link: GitHub Repository 
-https://github.com/Mykeylife/Metadata-Driven-Frame-work-pipeline.git)
-Metadata-Driven Framework PipelineA highly scalable, production-grade local pipeline orchestration engine built entirely in Python with an offline SQLite metadata control store, real-time metrics generation, and live execution telemetry tracking architecture.1. Project OverviewThis framework is a completely local and offline metadata-driven pipeline orchestrator designed to decouple core pipeline control flows from individual execution steps. Instead of hardcoding task lifecycles, execution properties, routing, and data validation parameters are driven entirely by localized database configurations.Key Engineering FeaturesZero Cloud Dependencies: Operates 100% locally and offline—built specifically to optimize computational workflows without relying on pay-as-you-go cloud architectures.Decoupled Architecture: Orchestrates complex data task sequences dynamically via modular database-driven step rows.Quality Gate Assertions: Evaluates source and target data tables before and after processing phases to completely prevent downstream data corruption.Live Webhook Telemetry: Features an automated, low-dependency communication layer that broadcasts immediate operational alerts (e.g., to Discord or Slack) the moment a quality gate breaches or a critical execution runtime exceptions drop.Comprehensive Audit Trail: Implements structured logging that writes atomic footprints into a centralized local execution warehouse.
-2. Core Architecture & Database SchemaThe orchestration engine manages pipeline life cycles by querying, processing, and updating five interconnected schemas inside your localized metadata control database file.```mermaid
-flowchart TD
-    %% Core Databases
-    subgraph LCS ["SQLite Metadata DB"]
-        PM["pipeline_metadata (Task Control & Ordering)"]
-        EL["pipeline_execution_logs (Atomic Logging Track)"]
-    end
+For complete documentation, database schemas, and installation steps, please visit the [GitHub Repository](https://github.com/Mykeylife/Metadata-Driven-Frame-work-pipeline.git).
 
-    %% Data Pipeline Flow
-    subgraph EPL ["Execution Processing Layers"]
-        SU[("staging_users (Source Ingestion Layer)")]
-        AK[("analytics_kpis (Intermediate Transformation)")]
-        SM[("summary_metrics (Aggregated Reporting Layer)")]
-    end
+## Overview & Architecture
+The framework decouples pipeline control flows from execution steps using localized database configurations instead of hardcoded task lifecycles. It operates completely offline with zero cloud dependencies, implements pre- and post-processing quality gate assertions, and features webhook telemetry for real-time alerting.
 
-    %% Gateway Alerting
-    subgraph TN ["Telemetry Network"]
-        WH["Webhook Logic Layer (Discord / Slack / Teams)"]
-    end
+The database architecture utilizes control tables (`pipeline_metadata`, `pipeline_execution_logs`) alongside business data layers (`staging_users`, `analytics_kpis`, `summary_metrics`).
 
-    %% Routing Engine Connections
-    PM --> SU
-    SU --> AK
-    AK --> SM
-    
-    %% Logs & Failures
-    SU -.-> EL
-    AK -.-> EL
-    SM -.-> EL
-    
-    %% Alert Threshold Breach
-    AK -.-> WH
-    SM -.-> WH
-```
-A. Core Control & Telemetry Tablespipeline_metadata (The Sequence Mapping Table)Tracks the activation states and ordered execution boundaries of registered pipeline blocks.step_id (INTEGER, PK): Auto-incrementing identifier for individual workflow phases.step_name (TEXT): A descriptor naming the specific pipeline process.target_table (TEXT): The database destination table associated with this structural block.execution_order (INTEGER): Numerical evaluation layout sequence (ordered chronologically).is_active (INTEGER): Binary toggle flag (1 for active, 0 for inactive).pipeline_execution_logs (The Audit Logging Table)Captures granular, multi-stage debugging and runtime execution history linked directly to active runs.id (INTEGER, PK): Auto-incrementing identifier tracking individual task milestones.run_id (TEXT): Unique tracking reference UUID for an explicit orchestration execution sweep.step_name (TEXT): Concrete operational phase being performed (e.g., analytics_kpis).status (TEXT): Pipeline state transitions (RUNNING, SUCCESS, FAILED, CRITICAL).execution_time (TEXT): Microsecond performance metrics tracking run duration.error_message (TEXT, Nullable): Captured exceptions or quality gate failure reasons.B. Business & Aggregate Data Layersstaging_users (Source Ingestion Layer)id (INTEGER, PK): Unique identification key for incoming user rows.username (TEXT, Not Null): Raw profile string values extracted from production systems.analytics_kpis (Intermediate Metrics Layer)kpi_id (INTEGER, PK): Unique tracking row reference.username (TEXT, Not Null): Processed profile reference string.username_length (INTEGER, Not Null): Custom operational transformation mapping (measures string depth).processed_at (TEXT, Not Null): ISO-8601 UTC timestamp footprint capturing transformation time.summary_metrics (Aggregated Reporting Layer)summary_id (INTEGER, PK): Core reporting identity cell.metric_name (TEXT, Not Null): Evaluated measurement property (e.g., max_username_length).metric_value (TEXT, Not Null): Aggregated evaluation value string compiled by the engine.calculated_at (TEXT, Not Null): Timestamp recorded at the completion of metrics generation.
-3. Local Workspace Setup GuideSystem RequirementsPython 3.11+Poetry (or a local dependency builder mapping via standard packaging utilities)Environment ConfigurationsTo configure environment vector variables or provision live webhook alerts, export the following variables in your terminal window before invoking the orchestrator:bashexport PIPELINE_DB_PATH="metadata_control.db"
-export PIPELINE_WEBHOOK_URL="https://discord.com"
-(If PIPELINE_WEBHOOK_URL is omitted, the framework automatically bypasses alerting logs and continues processing silently without crashing).InstallationClone this repository directly into your local machine environment:bashgit clone https://github.com/Mykeylife/Metadata-Driven-Frame-work-pipeline.git
-cd Metadata-Driven-Frame-work-pipeline
-Establish dependencies and lock environments using Poetry:bashpoetry install
-(Alternatively, run pip install -r requirements.txt to align tools within raw python runtime containers).
-4. Test Suite Execution & Code Quality GatesThis repository enforces strict code quality and linting baselines verified continuously through a localized automated CI framework.Running Local Unit TestsValidate execution mocks, pipeline logic paths, database schema connections, and webhook payloads using pytest:bashpoetry run pytest -v
-Use code with caution.Viewing Code Quality Coverage ReportsEnsure that total project test coverage stays strictly above the required 80% quality gate baseline:bashpoetry run coverage run -m pytest
-poetry run coverage report -m
-Use code with caution.Formatting and Syntax ComplianceCheck line constraints and coding syntax styles prior to creating repository commits:bashpoetry run black .
-poetry run flake8 .
-5. Deployment Options (Docker Containerization)For self-contained container deployments, compile and run the engine using the localized production configuration layout:bashdocker build -t metadata-orchestrator .
-docker run --rm --env PIPELINE_WEBHOOK_URL=$PIPELINE_WEBHOOK_URL metadata-orchestrator
-## 🚀 Quick Start & Usage Examples
-
-### 1. Initialize and Seed the Metadata Database
-Before running the orchestrator, you must provision the SQLite infrastructure tables and seed them with your pipeline configurations:
-
-```bash
-poetry run init-db
-```
-
-### 2. Programmatic Pipeline Execution
-You can invoke the metadata-driven orchestrator directly within your Python applications to manage task execution pipelines:
-
-```python
-import sqlite3
-from pipeline.config import get_db_path
-
-DB_PATH = get_db_path()
-
-def verify_pipeline_state():
-    """Validates that control metadata tables are structured correctly."""
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-    
-    # Query current active tasks tracked by metadata
-    cursor.execute("SELECT step_name, target_table FROM pipeline_metadata WHERE is_active = 1;")
-    active_tasks = cursor.fetchall()
-    
-    print(f"Loaded {len(active_tasks)} active production data pipeline tasks:")
-    for task in active_tasks:
-        print(f" - Task: {task[0]} -> Destination: {task[1]}")
-        
-    conn.close()
-
-if __name__ == "__main__":
-    verify_pipeline_state()
-```
-
-## 📄 License
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+## Quick Setup & Usage
+1. **Requirements:** Python 3.11+ and Poetry.
+2. **Environment Configuration:**
+   ```bash
+   export PIPELINE_DB_PATH="metadata_control.db"
+   export PIPELINE_WEBHOOK_URL="https://discord.com"
+   ```
+3. **Installation:**
+   ```bash
+   git clone https://github.com/Mykeylife/Metadata-Driven-Frame-work-pipeline.git
+   cd Metadata-Driven-Frame-work-pipeline
+   poetry install
+   ```
+4. **Database Initialization:**
+   ```bash
+   poetry run init-db
+   ```
+5. **Execution & Testing:** Run unit tests via `poetry run pytest -v` or build via Docker containers.
