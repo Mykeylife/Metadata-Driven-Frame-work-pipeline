@@ -1,30 +1,28 @@
+"""Initializes the local SQLite simulation database schema with baseline metadata."""
+
 import logging
-import sqlite3
 import os
+import sqlite3
 
-try:
-    from pipeline.config import get_db_path
-except ModuleNotFoundError:
-    from config import get_db_path
+from pipeline.config import get_db_path
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("init_simulation_db")
 
-DB_PATH = get_db_path()
 
-def initialize_database() -> None:
-    """Creates local data-plane tables and seeds active metadata configurations."""
-    logger.info("Initializing local simulation database at '%s'...", DB_PATH)
-    
-    # Ensure directory exists
-    db_dir = os.path.dirname(DB_PATH)
+def init_db(db_path: str = None) -> None:
+    """Creates local data tables and seeds baseline operational configurations."""
+    if not db_path:
+        db_path = get_db_path()
+
+    db_dir = os.path.dirname(db_path)
     if db_dir and not os.path.exists(db_dir):
-        os.makedirs(db_dir, exist_ok=True)
+        os.makedirs(db_dir)
 
-    conn = sqlite3.connect(DB_PATH)
+    logger.info(f"Initializing local simulation database at '{db_path}'...")
+    conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
 
-    # 1. Create Control Matrix Metadata Table
+    # Core control store table creation rules
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS pipeline_metadata (
             step_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -35,7 +33,6 @@ def initialize_database() -> None:
         );
     """)
 
-    # NEW: Centralized Local Audit Store Table (Telemetry Metrics Warehouse)
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS pipeline_execution_logs (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -43,13 +40,12 @@ def initialize_database() -> None:
             step_name TEXT NOT NULL,
             status TEXT NOT NULL,
             execution_time TEXT NOT NULL,
-            peak_memory_kb INTEGER DEFAULT 0,
-            cpu_time_seconds REAL DEFAULT 0.0,
+            peak_memory_kb INTEGER,
+            cpu_time_seconds REAL,
             error_message TEXT
         );
     """)
 
-    # 2. Create Target Data Tables
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS staging_users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -69,37 +65,35 @@ def initialize_database() -> None:
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS summary_metrics (
             summary_id INTEGER PRIMARY KEY AUTOINCREMENT,
-            metric_name TEXT NOT NULL UNIQUE,
+            metric_name TEXT NOT NULL,
             metric_value TEXT NOT NULL,
             calculated_at TEXT NOT NULL
         );
     """)
 
-    # 3. Seed Metadata Control Configurations
-    logger.info("Seeding pipeline control steps...")
+    # Seed initial tracking operational rows
     cursor.executemany("""
-        INSERT OR IGNORE INTO pipeline_metadata (step_name, target_table, execution_order, is_active)
-        VALUES (?, ?, ?, ?);
+        INSERT OR IGNORE INTO pipeline_metadata (step_id, step_name, target_table, execution_order, is_active)
+        VALUES (?, ?, ?, ?, ?);
     """, [
-        ("Process Users Staging", "staging_users", 10, 1),
-        ("Aggregate Analytics Metrics", "summary_metrics", 20, 1)
+        (1, "Load Staging Users Data", "staging_users", 1, 1),
+        (2, "Aggregate Analytics Metrics", "summary_metrics", 2, 1)
     ])
 
-    # 4. Seed Clean Mock Production Users
-    logger.info("Seeding initial staging user data records...")
-    cursor.execute("DELETE FROM staging_users;")  # Clear out stale rows
     cursor.executemany("""
-        INSERT INTO staging_users (username) VALUES (?);
+        INSERT OR IGNORE INTO staging_users (id, username)
+        VALUES (?, ?);
     """, [
-        ("micheal_akinbode",),
-        ("jessica_akinbode",),
-        ("olalanrewaju_dev",),
-        ("corrupted_record_test_   ",),  # Edge case spaces to test validators
+        (1, "alex_dataops"),
+        (2, "beatrice_eng"),
+        (3, "charlie_alpha")
     ])
 
     conn.commit()
     conn.close()
-    logger.info("Database simulation environment successfully initialized! ✅")
+    logger.info("Database initialization completed cleanly.")
+
 
 if __name__ == "__main__":
-    initialize_database()
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+    init_db()
