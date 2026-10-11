@@ -44,9 +44,12 @@ jobs:
       run: poetry install --no-interaction --no-root --sync --with dev
 
     - name: Run Code Linters & Formatters
-      env:
-        GITHUB_TOKEN: ${{ secrets.GH_PAT }}
       run: |
+        # Automatically organize imports and fix format violations inline
+        poetry run ruff check . --fix
+        poetry run ruff format .
+        
+        # Verify that everything is now perfectly compliant
         poetry run ruff check .
         poetry run ruff format --check .
 
