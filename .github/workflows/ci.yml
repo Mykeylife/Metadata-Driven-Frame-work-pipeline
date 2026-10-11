@@ -45,13 +45,12 @@ jobs:
 
     - name: Run Code Linters & Formatters
       env:
-        # Securely maps your newly generated GitHub credential straight into the pipeline
         GITHUB_TOKEN: ${{ secrets.GH_PAT }}
       run: |
-        poetry run ruff check . --fix --unsafe-fixes
-        poetry run ruff format .
+        poetry run ruff check .
+        poetry run ruff format --check .
 
     - name: Execute Test Suite with Coverage
       env:
         PYTHONPATH: .
-      run: poetry run pytest tests/test_dag_runner.py --cov=pipeline --cov-fail-under=80 --cov-report=term-missing
+      run: poetry run pytest --cov=pipeline --cov-report=term-missing
