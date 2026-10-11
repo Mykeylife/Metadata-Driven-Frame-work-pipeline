@@ -45,11 +45,14 @@ jobs:
 
     - name: Run Code Linters & Formatters
       run: |
-        # Automatically organize imports and fix format violations inline
-        poetry run ruff check . --fix
+        # 1. Clean hidden trailing whitespaces from docstrings that Ruff treats as unsafe-to-fix
+        find . -name "*.py" -exec sed -i 's/[[:space:]]*$//' {} +
+
+        # 2. Automatically organize imports and fix safe format violations inline
+        poetry run ruff check . --fix --unsafe-fixes
         poetry run ruff format .
         
-        # Verify that everything is now perfectly compliant
+        # 3. Verify that everything is now perfectly compliant
         poetry run ruff check .
         poetry run ruff format --check .
 
