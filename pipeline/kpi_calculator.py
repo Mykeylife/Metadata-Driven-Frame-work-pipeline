@@ -45,7 +45,6 @@ def compute_user_kpis(*args: Any, **kwargs: Any) -> Any:
 
     Intercepts loose positional/keyword args and routes safely to the production engine.
     """
-    # If the test passes elements directly without a validator context, provide a dummy fallback
     cursor = args[0] if len(args) > 0 else (kwargs.get("cursor") or None)
     users = args[1] if len(args) > 1 else (kwargs.get("users") or [])
     
