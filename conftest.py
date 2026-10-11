@@ -1,44 +1,34 @@
-import pytest
+import os
 import sqlite3
+import pytest
 
 @pytest.fixture
 def clean_db_conn():
-    """Initializes an in-memory SQLite database seeded with core orchestration tables."""
+    """Dynamically seeds an in-memory SQLite database using the project DDL file."""
     conn = sqlite3.connect(":memory:")
-    # Allow row-based dictionary scanning
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
 
-    # 1. Create the core metadata configuration table
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS pipeline_metadata (
-            step_id INTEGER PRIMARY KEY AUTOINCREMENT,
-            step_name TEXT NOT NULL,
-            target_table TEXT NOT NULL,
-            execution_order INTEGER NOT NULL,
-            is_active INTEGER NOT NULL DEFAULT 1
-        );
-    """)
+    # Locate your script path regardless of where the runner evaluates the task
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    sql_path = os.path.join(base_dir, "v1_init_metadata_tables.sql")
 
-    # 2. CREATE THE MISSING EXECUTION LOGS TABLE (This stops the crash!)
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS pipeline_execution_logs (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            run_id TEXT NOT NULL,
-            step_name TEXT NOT NULL,
-            status TEXT NOT NULL,
-            execution_time TEXT NOT NULL,
-            error_message TEXT
-        );
-    """)
+    # Fallback to root directory if conftest is located inside a nested /tests folder
+    if not os.path.exists(sql_path):
+        sql_path = os.path.join(os.path.dirname(base_dir), "v1_init_metadata_tables.sql")
 
-    # 3. Create the ingestion table
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS staging_users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            username TEXT NOT NULL
-        );
-    """)
+    if os.path.exists(sql_path):
+        with open(sql_path, "r") as f:
+            sql_script = f.read()
+        # Execute the entire script block (creating all 5 tables + seeding metadata records)
+        cursor.executescript(sql_script)
+    else:
+        # Emergency raw backup initialization if file path resolution shifts inside CI
+        cursor.execute("CREATE TABLE pipeline_metadata (step_id INTEGER PRIMARY KEY, step_name TEXT UNIQUE, target_table TEXT, execution_order INTEGER, is_active INTEGER);")
+        cursor.execute("CREATE TABLE pipeline_execution_logs (id INTEGER PRIMARY KEY, run_id TEXT, step_name TEXT, status TEXT, execution_time TEXT, error_message TEXT);")
+        cursor.execute("CREATE TABLE staging_users (id INTEGER PRIMARY KEY, username TEXT);")
+        cursor.execute("CREATE TABLE analytics_kpis (kpi_id INTEGER PRIMARY KEY, username TEXT, username_length INTEGER, processed_at TEXT);")
+        cursor.execute("CREATE TABLE summary_metrics (summary_id INTEGER PRIMARY KEY, metric_name TEXT, metric_value TEXT, calculated_at TEXT);")
 
     conn.commit()
     yield conn
