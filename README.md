@@ -58,3 +58,42 @@ if __name__ == "__main__":
 
 ## 📄 License
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+```mermaid
+graph TD
+    %% Core Databases
+    subgraph Local Control Store [SQLite Metadata DB]
+        PM[pipeline_metadata<br>Task Control & Ordering]
+        EL[pipeline_execution_logs<br>Atomic Logging Track]
+    end
+
+    %% Data Pipeline Flow
+    subgraph Execution Processing Layers
+        SU[(staging_users<br>Source Ingestion Layer)]
+        AK[(analytics_kpis<br>Intermediate Transformation)]
+        SM[(summary_metrics<br>Aggregated Reporting Layer)]
+    end
+
+    %% Gateway Alerting
+    subgraph Telemetry Network
+        WH[Webhook Logic Layer<br>Discord / Slack / Teams]
+    end
+
+    %% Routing Engine Connections
+    PM -->|1. Validates State| SU
+    SU -->|2. Quality Gate Assertion| AK
+    AK -->|3. Custom Measures| SM
+    
+    %% Logs & Failures
+    SU -.->|Log Traces| EL
+    AK -.->|Log Traces| EL
+    SM -.->|Log Traces| EL
+    
+    %% Alert Threshold Breach
+    AK -.->|On Breach / Exception| WH
+    SM -.->|On Failure| WH
+    
+    style Local Control Store fill:#1f2937,stroke:#3b82f6,stroke-width:2px;
+    style Execution Processing Layers fill:#111827,stroke:#10b981,stroke-width:2px;
+    style Telemetry Network fill:#31102f,stroke:#ef4444,stroke-width:2px;
+```
+
