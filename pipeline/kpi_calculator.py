@@ -8,7 +8,9 @@ from .validators import DataQualityValidator
 logger = logging.getLogger("dag_runner.kpi_calculator")
 
 
-def process_aggregate_metrics(cursor: Any, users: list[Any], validator: DataQualityValidator) -> None:
+def process_aggregate_metrics(
+    cursor: Any, users: list[Any], validator: DataQualityValidator
+) -> None:
     """Validates records, extracts depths, and pushes analytics safely down to targets."""
     valid_users = []
     for u in users:
@@ -16,10 +18,14 @@ def process_aggregate_metrics(cursor: Any, users: list[Any], validator: DataQual
         if validator.validate_row_record("staging_users", row_dict):
             valid_users.append(u)
         else:
-            logger.warning("Skipping individual corrupted data record inside staging sweep.")
+            logger.warning(
+                "Skipping individual corrupted data record inside staging sweep."
+            )
 
     if not valid_users:
-        logger.warning("No valid rows passed the data quality threshold for calculations.")
+        logger.warning(
+            "No valid rows passed the data quality threshold for calculations."
+        )
         return
 
     max_len = max(len(u["username"]) for u in valid_users if u["username"])
@@ -32,3 +38,20 @@ def process_aggregate_metrics(cursor: Any, users: list[Any], validator: DataQual
         username = user["username"]
         if username:
             insert_analytics_kpi(cursor, username, len(username))
+
+
+def compute_user_kpis(*args: Any, **kwargs: Any) -> Any:
+    """Backward-compatibility wrapper for legacy unit test suites.
+
+    Intercepts loose positional/keyword args and routes safely to the production engine.
+    """
+    # If the test passes elements directly without a validator context, provide a dummy fallback
+    cursor = args[0] if len(args) > 0 else (kwargs.get("cursor") or None)
+    users = args[1] if len(args) > 1 else (kwargs.get("users") or [])
+    
+    validator = (
+        args[2] if len(args) > 2 
+        else kwargs.get("validator") or DataQualityValidator()
+    )
+
+    return process_aggregate_metrics(cursor, users, validator)
