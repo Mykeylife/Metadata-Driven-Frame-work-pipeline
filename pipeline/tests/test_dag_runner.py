@@ -29,7 +29,7 @@ def clean_db_conn():
         """
         CREATE TABLE pipeline_metadata (
             step_id INTEGER PRIMARY KEY AUTOINCREMENT,
-            step_name TEXT NOT NULL,
+            step_name TEXT NOT NULL UNIQUE,
             target_table TEXT NOT NULL,
             execution_order INTEGER NOT NULL,
             is_active INTEGER DEFAULT 1
@@ -37,23 +37,28 @@ def clean_db_conn():
     """
     )
     cursor.execute(
-        "CREATE TABLE staging_users (id INTEGER PRIMARY KEY, username TEXT);"
+        "CREATE TABLE staging_users (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT NOT NULL);"
     )
     cursor.execute(
-        "CREATE TABLE analytics_kpis (kpi_id INTEGER PRIMARY KEY, username TEXT, username_length INTEGER, processed_at TEXT);"
+        "CREATE TABLE analytics_kpis (kpi_id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT NOT NULL, username_length INTEGER NOT NULL, processed_at TEXT NOT NULL);"
     )
     cursor.execute(
-        "CREATE TABLE summary_metrics (summary_id INTEGER PRIMARY KEY, metric_name TEXT, metric_value TEXT, calculated_at TEXT);"
+        "CREATE TABLE summary_metrics (summary_id INTEGER PRIMARY KEY AUTOINCREMENT, metric_name TEXT NOT NULL, metric_value TEXT NOT NULL, calculated_at TEXT NOT NULL);"
     )
+    
+    # REPAIRED: Fully matched structural data governance columns
     cursor.execute(
         """
         CREATE TABLE pipeline_execution_logs (
-            log_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
             run_id TEXT NOT NULL,
             step_name TEXT NOT NULL,
             status TEXT NOT NULL,
             execution_time TEXT NOT NULL,
-            error_message TEXT
+            error_message TEXT,
+            data_lineage_hash TEXT,
+            quality_score REAL,
+            licensing_governance TEXT DEFAULT 'MIT-Data-Asset-v1'
         );
     """
     )
@@ -109,7 +114,6 @@ def test_dag_runner_skips_invalid_corrupted_rows(clean_db_conn):
 
     runner = DAGRunner(pipeline_name="Data-Quality-Gating-Validation")
 
-    # FIX: Patches the correct kpi_calculator logger instance where the warning is emitted
     with patch("sqlite3.connect", return_value=clean_db_conn), patch(
         "pipeline.kpi_calculator.logger.warning"
     ) as mock_warn:
@@ -148,7 +152,6 @@ def test_dag_runner_aborts_on_failed_boot_schema(clean_db_conn):
 
     with patch("sqlite3.connect", return_value=clean_db_conn):
         runner.run()
-        # FIX: Matches the intentional SKIPPED fallback status code returned by the repository query guard
         assert runner.status == "SKIPPED"
 
 
