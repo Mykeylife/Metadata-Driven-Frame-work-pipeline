@@ -45,10 +45,20 @@ def insert_analytics_kpi(cursor: sqlite3.Cursor, username: str, length: int) -> 
 
 
 def log_pipeline_telemetry(
-    cursor: sqlite3.Cursor, run_id: str, step_name: str, status: str, error_message: Optional[str] = None
+    cursor: sqlite3.Cursor, 
+    run_id: str, 
+    step_name: str, 
+    status: str, 
+    error_message: Optional[str] = None,
+    data_lineage_hash: Optional[str] = None,
+    quality_score: Optional[float] = None,
+    licensing_governance: str = "MIT-Data-Asset-v1"
 ) -> None:
-    """Appends atomic execution logs to maintain structural audit paths."""
+    """Appends atomic execution logs to maintain structural audit paths with licensing governance."""
     cursor.execute("""
-        INSERT INTO pipeline_execution_logs (run_id, step_name, status, execution_time, error_message)
-        VALUES (?, ?, ?, datetime('now'), ?);
-    """, (run_id, step_name, status, error_message))
+        INSERT INTO pipeline_execution_logs (
+            run_id, step_name, status, execution_time, error_message, 
+            data_lineage_hash, quality_score, licensing_governance
+        )
+        VALUES (?, ?, ?, datetime('now'), ?, ?, ?, ?);
+    """, (run_id, step_name, status, error_message, data_lineage_hash, quality_score, licensing_governance))
