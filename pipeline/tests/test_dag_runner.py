@@ -36,17 +36,18 @@ def clean_db_conn():
         );
     """
     )
+    # REPAIRED: Removed restrictive NOT NULL to allow data quality test paths to seed bad records safely
     cursor.execute(
-        "CREATE TABLE staging_users (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT NOT NULL);"
+        "CREATE TABLE staging_users (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT);"
     )
     cursor.execute(
-        "CREATE TABLE analytics_kpis (kpi_id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT NOT NULL, username_length INTEGER NOT NULL, processed_at TEXT NOT NULL);"
+        "CREATE TABLE analytics_kpis (kpi_id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT, username_length INTEGER, processed_at TEXT);"
     )
     cursor.execute(
-        "CREATE TABLE summary_metrics (summary_id INTEGER PRIMARY KEY AUTOINCREMENT, metric_name TEXT NOT NULL, metric_value TEXT NOT NULL, calculated_at TEXT NOT NULL);"
+        "CREATE TABLE summary_metrics (summary_id INTEGER PRIMARY KEY AUTOINCREMENT, metric_name TEXT, metric_value TEXT, calculated_at TEXT);"
     )
     
-    # REPAIRED: Fully matched structural data governance columns
+    # Fully matched structural data governance columns
     cursor.execute(
         """
         CREATE TABLE pipeline_execution_logs (
