@@ -1,5 +1,7 @@
-"""Orchestrates metadata-driven pipelines via cleanly isolated transaction patterns."""
+"""Orchestrates metadata-driven pipelines via cleanly isolated transaction patterns with data governance."""
 
+import hashlib
+import json
 import logging
 import sqlite3
 import time
@@ -25,7 +27,7 @@ logger.propagate = False
 
 
 class DAGRunner:
-    """Orchestrates loop cycles using decoupled data management models."""
+    """Orchestrates loop cycles using decoupled data management models with lineage tracking."""
 
     def __init__(self, pipeline_name: str) -> None:
         self.pipeline_name: str = pipeline_name
@@ -33,8 +35,17 @@ class DAGRunner:
         self.db_path: str = get_db_path()
         self.run_id: str = str(uuid.uuid4())
 
+    def _generate_lineage_hash(self, rows: list) -> str:
+        """Generates a deterministic cryptographic hash representing data state provenance."""
+        if not rows:
+            return hashlib.sha256(b"empty_dataset").hexdigest()
+        
+        # Serialize and sort rows to ensure deterministic hashing
+        serialized_data = json.dumps([dict(r) for r in rows], sort_keys=True, default=str)
+        return hashlib.sha256(serialized_data.encode("utf-8")).hexdigest()
+
     def run(self) -> None:
-        """Executes processing phases sequentially with strict gating boundaries."""
+        """Executes processing phases sequentially with strict gating and governance telemetry."""
         logger.info(f"Starting ingestion lifecycle execution for: {self.pipeline_name}")
         self.status = "RUNNING"
 
@@ -65,25 +76,59 @@ class DAGRunner:
                 target_table = step["target_table"]
 
                 logger.info(f"[Step {step_id}] Initializing worker: {step_name} -> Target: {target_table}")
-                repository.log_pipeline_telemetry(cursor, self.run_id, step_name, "RUNNING")
+                
+                # Baseline telemetry initialization
+                repository.log_pipeline_telemetry(
+                    cursor, self.run_id, step_name, "RUNNING", 
+                    licensing_governance="MIT-Data-Asset-v1"
+                )
+
+                # Variables to hold calculated governance metrics
+                lineage_hash = None
+                quality_score = 1.0
 
                 # Row-count safety validation barrier
                 if target_table == "staging_users":
-                    if repository.check_table_row_count(cursor, "staging_users") == 0:
+                    row_count = repository.check_table_row_count(cursor, "staging_users")
+                    if row_count == 0:
                         error_msg = "Safety guard triggered: 'staging_users' is completely empty. Halting pipeline."
                         logger.error(error_msg)
-                        repository.log_pipeline_telemetry(cursor, self.run_id, step_name, "FAILED", error_msg)
+                        repository.log_pipeline_telemetry(
+                            cursor, self.run_id, step_name, "FAILED", 
+                            error_message=error_msg, quality_score=0.0
+                        )
                         self.status = "FAILED"
                         break
 
-                # Calculation phase
+                # Calculation & Transformation Phase
                 if step_name == "Aggregate Analytics Metrics" or target_table == "summary_metrics":
-                    users = repository.fetch_staging_usernames(cursor)
-                    if users:
-                        kpi_calculator.process_aggregate_metrics(cursor, users, validator)
+                    raw_users = repository.fetch_staging_usernames(cursor)
+                    
+                    # 1. Compute Cryptographic Lineage Hash for Audit Trail
+                    lineage_hash = self._generate_lineage_hash(raw_users)
+                    
+                    if raw_users:
+                        # 2. Compute Quality Score based on valid records passing the validation threshold
+                        total_rows = len(raw_users)
+                        valid_records = []
+                        for u in raw_users:
+                            row_dict = dict(u) if hasattr(u, "keys") else {"username": str(u)}
+                            if validator.validate_row_record("staging_users", row_dict):
+                                valid_records.append(u)
+                        
+                        quality_score = round(len(valid_records) / total_rows, 4)
+                        
+                        # Process metrics using your underlying KPI engine
+                        kpi_calculator.process_aggregate_metrics(cursor, raw_users, validator)
 
-                repository.log_pipeline_telemetry(cursor, self.run_id, step_name, "SUCCESS")
-                logger.info(f"[Step {step_id}] Executed successfully.")
+                # Commit telemetry alongside data governance metadata
+                repository.log_pipeline_telemetry(
+                    cursor, self.run_id, step_name, "SUCCESS",
+                    data_lineage_hash=lineage_hash,
+                    quality_score=quality_score,
+                    licensing_governance="MIT-Data-Asset-v1"
+                )
+                logger.info(f"[Step {step_id}] Executed successfully with Quality Score: {quality_score}")
 
             if self.status != "FAILED":
                 self.status = "SUCCESS"
@@ -101,7 +146,6 @@ class DAGRunner:
             end_time = time.time()
             duration = end_time - start_time
 
-            # Extract footprints safely across system containers
             if resource and start_ru:
                 end_ru = resource.getrusage(resource.RUSAGE_SELF)
                 cpu_time = (end_ru.ru_utime - start_ru.ru_utime) + (end_ru.ru_stime - start_ru.ru_stime)
