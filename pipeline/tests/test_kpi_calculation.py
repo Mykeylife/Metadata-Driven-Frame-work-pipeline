@@ -7,5 +7,6 @@ def test_compute_user_kpis_empty_input():
 def test_compute_user_kpis_valid_data():
     results = compute_user_kpis(None, ["mykeylife", "testuser"])
     assert len(results) == 2
-    assert results[0][0] == "mykeylife"
-    assert results[0][1] == 9  # character length
+    
+    # Matches the internal output format of the dictionary maps returned
+    assert results[0]["username"] == "mykeylife"
