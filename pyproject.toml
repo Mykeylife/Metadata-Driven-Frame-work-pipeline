@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "A production-grade local metadata-driven pipeline orchestrator with built-in quality gates and webhook telemetry."
 authors = ["Olanrewaju Micheal Akinbode <mykeylife6@gmail.com>"]
 readme = "README.md"
-package-mode = false
+package-mode = true
 
 [tool.poetry.dependencies]
 python = "^3.11"
@@ -55,7 +55,7 @@ exclude = [
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
-testpaths = ["pipeline/tests"]
+testpaths = ["tests"]
 addopts = "-ra -q --cov=. --cov-report=term-missing"
 
 [tool.poetry.scripts]
