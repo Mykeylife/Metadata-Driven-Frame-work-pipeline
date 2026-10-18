@@ -10,7 +10,7 @@ CREATE TABLE IF NOT EXISTS pipeline_metadata (
 );
 
 -- ====================================================================
--- 2. GRANULAR AUDIT LOGGING & TELEMETRY ENGINE TABLE
+-- 2. GRANULAR AUDIT LOGGING & TELEMETRY ENGINE TABLE (UPGRADED FOR GOVERNANCE)
 -- ====================================================================
 CREATE TABLE IF NOT EXISTS pipeline_execution_logs (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -18,7 +18,11 @@ CREATE TABLE IF NOT EXISTS pipeline_execution_logs (
     step_name TEXT NOT NULL,
     status TEXT NOT NULL,                          -- 'RUNNING', 'SUCCESS', 'FAILED', 'CRITICAL'
     execution_time TEXT NOT NULL,                  -- Microsecond runtime tracking
-    error_message TEXT
+    error_message TEXT,
+    -- Core Data Factor Governance Extensions:
+    data_lineage_hash TEXT,                       -- Deterministic cryptographic footprint of the dataset row snapshot
+    quality_score REAL,                           -- Quantitative check metric (0.00 to 1.00 validation rate)
+    licensing_governance TEXT DEFAULT 'MIT-Data-Asset-v1' -- Compliance policy binding label
 );
 
 -- ====================================================================
