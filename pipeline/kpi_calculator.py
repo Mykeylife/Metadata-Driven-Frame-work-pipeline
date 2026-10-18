@@ -15,16 +15,16 @@ def process_aggregate_metrics(
     valid_users = []
     
     for u in users:
-        # Gracefully handle legacy test strings or production dictionary rows
+        # Gracefully handle legacy test strings, production rows, or dictionary types
         if isinstance(u, str):
             row_dict = {"username": u}
-            valid_user_obj = {"username": u}
+        elif hasattr(u, "keys"):  # Dict or sqlite3.Row instance
+            row_dict = dict(u)
         else:
-            row_dict = dict(u) if u else {}
-            valid_user_obj = u
+            row_dict = {}
 
         if validator.validate_row_record("staging_users", row_dict):
-            valid_users.append(valid_user_obj)
+            valid_users.append(row_dict)
         else:
             logger.warning(
                 "Skipping individual corrupted data record inside staging sweep."
