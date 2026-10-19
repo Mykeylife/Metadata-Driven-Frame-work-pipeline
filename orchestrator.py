@@ -1,7 +1,6 @@
 import logging
 import sqlite3
-import sys
-from typing import TYPE_CHECKING, List, Tuple
+from typing import TYPE_CHECKING
 
 # Prevent Mypy from identifying duplicate definitions during structural analysis
 if TYPE_CHECKING:
@@ -27,7 +26,7 @@ logger = logging.getLogger("pipeline_orchestrator")
 
 DB_PATH = get_db_path()
 
-def fetch_active_steps() -> List[Tuple[int, str, str, int]]:
+def fetch_active_steps() -> list:
     """Retrieves all active configuration steps sorted by execution priority order."""
     logger.info("Connecting to metadata infrastructure database at '%s'...", DB_PATH)
     conn = sqlite3.connect(DB_PATH)
