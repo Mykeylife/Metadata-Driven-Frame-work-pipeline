@@ -56,7 +56,7 @@ exclude = [
 [tool.pytest.ini_options]
 pythonpath = ["."]
 testpaths = ["pipeline/tests"]
-addopts = "-ra -q --cov=. --cov-report=term-missing"
+addopts = "-ra -q --cov=. --cov-report=term-missing --cov-fail-under=70"
 
 [tool.poetry.scripts]
 pipeline = "orchestrator:main"
