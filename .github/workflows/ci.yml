@@ -45,18 +45,11 @@ jobs:
 
     - name: Run Code Linters & Formatters
       run: |
-        # 1. Clean hidden trailing whitespaces from docstrings that Ruff treats as unsafe-to-fix
-        find . -name "*.py" -exec sed -i 's/[[:space:]]*$//' {} +
-
-        # 2. Automatically organize imports and fix safe format violations inline
-        poetry run ruff check . --fix --unsafe-fixes
-        poetry run ruff format .
-        
-        # 3. Verify that everything is now perfectly compliant
+        # Enforce strict compliance checks without altering code during transit
         poetry run ruff check .
         poetry run ruff format --check .
 
     - name: Execute Test Suite with Coverage
       env:
         PYTHONPATH: .
-      run: poetry run pytest --cov=pipeline --cov-report=term-missing
+      run: poetry run pytest --cov=pipeline --cov-report=term-missing --cov-fail-under=70
