@@ -1,3 +1,5 @@
+"""Main engine routing module for metadata control execution configurations."""
+
 import logging
 import sqlite3
 from typing import TYPE_CHECKING
@@ -18,20 +20,19 @@ else:
 
 # Configure structured production-ready terminal logging framework
 logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(message)s",
-    handlers=[logging.StreamHandler()]
+    level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s", handlers=[logging.StreamHandler()]
 )
 logger = logging.getLogger("pipeline_orchestrator")
 
 DB_PATH = get_db_path()
+
 
 def fetch_active_steps() -> list:
     """Retrieves all active configuration steps sorted by execution priority order."""
     logger.info("Connecting to metadata infrastructure database at '%s'...", DB_PATH)
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
-    
+
     query = """
         SELECT step_id, step_name, target_table, execution_order 
         FROM pipeline_metadata 
@@ -41,15 +42,16 @@ def fetch_active_steps() -> list:
     cursor.execute(query)
     steps = cursor.fetchall()
     conn.close()
-    
+
     logger.info("Successfully discovered %d active ingestion tasks.", len(steps))
     return steps
+
 
 def execute_pipeline() -> None:
     """Orchestrates the sequence flow of data ingestion steps based on control tables."""
     logger.info("Initializing metadata-driven orchestrator engine run...")
     active_steps = fetch_active_steps()
-    
+
     if not active_steps:
         logger.warning("No active steps found in control tables. Exiting engine flow safely.")
         return
@@ -59,17 +61,18 @@ def execute_pipeline() -> None:
         logger.info("Active metadata steps validated. Instantiating DAG runner execution loop...")
         runner = DAGRunner(pipeline_name="Production-Orchestrated-Ingestion-Flow")
         runner.run()
-        
+
         if runner.status == "SUCCESS":
             logger.info("Metadata-driven orchestrator engine executed all tasks successfully! 🚀")
         elif runner.status == "SKIPPED":
             logger.warning("DAG runner completed execution with a SKIPPED status flag.")
         else:
             raise RuntimeError(f"DAG runner terminated with an unexpected status: {runner.status}")
-            
+
     except Exception as e:
         logger.error("Critical orchestration failure detected: %s", str(e))
         raise
+
 
 if __name__ == "__main__":
     execute_pipeline()
