@@ -1,7 +1,7 @@
 """Database abstraction layer for pipeline control matrix operations."""
 
 import sqlite3
-from typing import Any, Optional
+from typing import Any
 
 
 def fetch_active_metadata_steps(cursor: sqlite3.Cursor) -> list[dict[str, Any]]:
@@ -49,9 +49,9 @@ def log_pipeline_telemetry(
     run_id: str, 
     step_name: str, 
     status: str, 
-    error_message: Optional[str] = None,
-    data_lineage_hash: Optional[str] = None,
-    quality_score: Optional[float] = None,
+    error_message: str | None = None,
+    data_lineage_hash: str | None = None,
+    quality_score: float | None = None,
     licensing_governance: str = "MIT-Data-Asset-v1"
 ) -> None:
     """Appends atomic execution logs to maintain structural audit paths with licensing governance."""
