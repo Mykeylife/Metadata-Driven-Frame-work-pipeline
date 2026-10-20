@@ -1,3 +1,5 @@
+"""Dynamically seeds database connection hooks for testing frameworks."""
+
 import os
 import sqlite3
 
@@ -20,7 +22,6 @@ def clean_db_conn():
         sql_path = os.path.join(os.path.dirname(base_dir), "v1_init_metadata_tables.sql")
 
     if os.path.exists(sql_path):
-        # FIXED: Removed unnecessary "r" open mode parameter to satisfy UP015
         with open(sql_path) as f:
             sql_script = f.read()
         # Execute the entire script block (creating all 5 tables + seeding metadata records)
@@ -28,12 +29,12 @@ def clean_db_conn():
     else:
         # Emergency raw backup initialization if file path resolution shifts inside CI
         cursor.execute(
-            "CREATE TABLE pipeline_metadata (step_id INTEGER PRIMARY KEY, step_name TEXT UNIQUE, target_table TEXT, "
-            "execution_order INTEGER, is_active INTEGER);"
+            "CREATE TABLE pipeline_metadata (step_id INTEGER PRIMARY KEY, step_name TEXT UNIQUE, "
+            "target_table TEXT, execution_order INTEGER, is_active INTEGER);"
         )
         cursor.execute(
-            "CREATE TABLE pipeline_execution_logs (id INTEGER PRIMARY KEY, run_id TEXT, step_name TEXT, status TEXT, "
-            "execution_time TEXT, error_message TEXT);"
+            "CREATE TABLE pipeline_execution_logs (id INTEGER PRIMARY KEY, run_id TEXT, step_name TEXT, "
+            "status TEXT, execution_time TEXT, error_message TEXT);"
         )
         cursor.execute("CREATE TABLE staging_users (id INTEGER PRIMARY KEY, username TEXT);")
         cursor.execute(
