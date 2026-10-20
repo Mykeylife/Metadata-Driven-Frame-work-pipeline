@@ -39,7 +39,7 @@ class DAGRunner:
         """Generates a deterministic cryptographic hash representing data state provenance."""
         if not rows:
             return hashlib.sha256(b"empty_dataset").hexdigest()
-        
+
         # Serialize and sort rows to ensure deterministic hashing
         serialized_data = json.dumps([dict(r) for r in rows], sort_keys=True, default=str)
         return hashlib.sha256(serialized_data.encode("utf-8")).hexdigest()
@@ -76,11 +76,10 @@ class DAGRunner:
                 target_table = step["target_table"]
 
                 logger.info(f"[Step {step_id}] Initializing worker: {step_name} -> Target: {target_table}")
-                
+
                 # Baseline telemetry initialization
                 repository.log_pipeline_telemetry(
-                    cursor, self.run_id, step_name, "RUNNING", 
-                    licensing_governance="MIT-Data-Asset-v1"
+                    cursor, self.run_id, step_name, "RUNNING", licensing_governance="MIT-Data-Asset-v1"
                 )
 
                 # Variables to hold calculated governance metrics
@@ -94,8 +93,7 @@ class DAGRunner:
                         error_msg = "Safety guard triggered: 'staging_users' is completely empty. Halting pipeline."
                         logger.error(error_msg)
                         repository.log_pipeline_telemetry(
-                            cursor, self.run_id, step_name, "FAILED", 
-                            error_message=error_msg, quality_score=0.0
+                            cursor, self.run_id, step_name, "FAILED", error_message=error_msg, quality_score=0.0
                         )
                         self.status = "FAILED"
                         break
@@ -103,10 +101,10 @@ class DAGRunner:
                 # Calculation & Transformation Phase
                 if step_name == "Aggregate Analytics Metrics" or target_table == "summary_metrics":
                     raw_users = repository.fetch_staging_usernames(cursor)
-                    
+
                     # 1. Compute Cryptographic Lineage Hash for Audit Trail
                     lineage_hash = self._generate_lineage_hash(raw_users)
-                    
+
                     if raw_users:
                         # 2. Compute Quality Score based on valid records passing the validation threshold
                         total_rows = len(raw_users)
@@ -115,18 +113,21 @@ class DAGRunner:
                             row_dict = dict(u) if hasattr(u, "keys") else {"username": str(u)}
                             if validator.validate_row_record("staging_users", row_dict):
                                 valid_records.append(u)
-                        
+
                         quality_score = round(len(valid_records) / total_rows, 4)
-                        
+
                         # Process metrics using your underlying KPI engine
                         kpi_calculator.process_aggregate_metrics(cursor, raw_users, validator)
 
                 # Commit telemetry alongside data governance metadata
                 repository.log_pipeline_telemetry(
-                    cursor, self.run_id, step_name, "SUCCESS",
+                    cursor,
+                    self.run_id,
+                    step_name,
+                    "SUCCESS",
                     data_lineage_hash=lineage_hash,
                     quality_score=quality_score,
-                    licensing_governance="MIT-Data-Asset-v1"
+                    licensing_governance="MIT-Data-Asset-v1",
                 )
                 logger.info(f"[Step {step_id}] Executed successfully with Quality Score: {quality_score}")
 
