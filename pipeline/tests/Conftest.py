@@ -17,7 +17,7 @@ def clean_db_conn():
     base_dir = os.path.dirname(os.path.abspath(__file__))
     sql_path = os.path.join(base_dir, "v1_init_metadata_tables.sql")
 
-    # Fallback to root directory if conftest is located inside a nested /tests folder
+    # Fallback to root directory if conftest is located inside a nested folder
     if not os.path.exists(sql_path):
         sql_path = os.path.join(os.path.dirname(base_dir), "v1_init_metadata_tables.sql")
 
