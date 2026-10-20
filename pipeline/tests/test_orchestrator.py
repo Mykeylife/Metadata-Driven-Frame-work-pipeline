@@ -1,6 +1,5 @@
 """Unit tests verifying metadata orchestrator main routing conditions."""
 
-import sqlite3
 from unittest.mock import patch
 
 from pipeline.orchestrator import execute_pipeline, fetch_active_steps
