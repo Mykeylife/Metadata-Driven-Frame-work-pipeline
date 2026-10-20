@@ -1,5 +1,8 @@
+"""Unit testing structures verifying structural run workflows."""
+
 import sqlite3
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
+
 import pytest
 
 # Insulate module paths to prevent environment path collisions during local execution
@@ -37,16 +40,16 @@ def clean_db_conn():
     """
     )
     # REPAIRED: Removed restrictive NOT NULL to allow data quality test paths to seed bad records safely
+    cursor.execute("CREATE TABLE staging_users (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT);")
     cursor.execute(
-        "CREATE TABLE staging_users (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT);"
+        "CREATE TABLE analytics_kpis (kpi_id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT, "
+        "username_length INTEGER, processed_at TEXT);"
     )
     cursor.execute(
-        "CREATE TABLE analytics_kpis (kpi_id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT, username_length INTEGER, processed_at TEXT);"
+        "CREATE TABLE summary_metrics (summary_id INTEGER PRIMARY KEY AUTOINCREMENT, metric_name TEXT, "
+        "metric_value TEXT, calculated_at TEXT);"
     )
-    cursor.execute(
-        "CREATE TABLE summary_metrics (summary_id INTEGER PRIMARY KEY AUTOINCREMENT, metric_name TEXT, metric_value TEXT, calculated_at TEXT);"
-    )
-    
+
     # Fully matched structural data governance columns
     cursor.execute(
         """
@@ -94,7 +97,6 @@ def test_dag_runner_successful_execution_loop(clean_db_conn):
     with patch("sqlite3.connect", return_value=clean_db_conn), patch(
         "pipeline.dag_runner.logger.info"
     ) as mock_logger:
-
         runner.run()
         assert runner.status == "SUCCESS"
         mock_logger.assert_any_call("DAG step execution completed cleanly.")
@@ -118,12 +120,9 @@ def test_dag_runner_skips_invalid_corrupted_rows(clean_db_conn):
     with patch("sqlite3.connect", return_value=clean_db_conn), patch(
         "pipeline.kpi_calculator.logger.warning"
     ) as mock_warn:
-
         runner.run()
         assert runner.status == "SUCCESS"
-        mock_warn.assert_any_call(
-            "Skipping individual corrupted data record inside staging sweep."
-        )
+        mock_warn.assert_any_call("Skipping individual corrupted data record inside staging sweep.")
 
 
 def test_dag_runner_halts_if_all_rows_fail_validation(clean_db_conn):
@@ -170,7 +169,6 @@ def test_dag_runner_safety_barrier_empty_staging_users(clean_db_conn):
     with patch("sqlite3.connect", return_value=clean_db_conn), patch(
         "pipeline.dag_runner.logger.error"
     ) as mock_error:
-
         runner.run()
         assert runner.status == "FAILED"
         mock_error.assert_any_call(
