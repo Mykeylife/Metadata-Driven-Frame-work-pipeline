@@ -6,6 +6,7 @@ import resource
 import sqlite3
 import time
 import uuid
+from typing import Any
 
 try:
     from pipeline.config import get_db_path
@@ -49,30 +50,31 @@ class TaskCapacityManager:
             end_ru = resource.getrusage(resource.RUSAGE_SELF) if resource else None
 
             duration_ms = (end_time - start_time) * 1000
-            cpu_time = (end_ru.ru_utime - start_ru.ru_utime) + (end_ru.ru_stime - start_ru.ru_stime) if (end_ru and start_ru) else 0.0
+            cpu_time = (
+                (end_ru.ru_utime - start_ru.ru_utime) + (end_ru.ru_stime - start_ru.ru_stime)
+                if (end_ru and start_ru)
+                else 0.0
+            )
             peak_memory = end_ru.ru_maxrss if end_ru else 0
 
             # Build an explicit details payload to fit all footprint profiling metadata into the schema
             governance_details = (
-                f"{message} | Duration: {duration_ms:.2f}ms | "
-                f"Peak Memory: {peak_memory} KB | CPU Time: {cpu_time:.4f}s"
+                f"{message} | Duration: {duration_ms:.2f}ms | Peak Memory: {peak_memory} KB | CPU Time: {cpu_time:.4f}s"
             )
 
             # Create a deterministic mock hash block for the tracked workload row data
             workload_hash = hashlib.sha256(governance_details.encode("utf-8")).hexdigest()
 
             # Map parameters perfectly to your operational data governance schema columns
-            cursor.execute('''
+            cursor.execute(
+                """
                 INSERT INTO pipeline_execution_logs (
                     run_id, step_name, status, execution_time, error_message, 
                     data_lineage_hash, quality_score, licensing_governance
                 ) VALUES (?, ?, 'SUCCESS', datetime('now'), ?, ?, 1.0, 'MIT-Data-Asset-v1')
-            ''', (
-                run_id, 
-                f"{step_name}_{task_id}", 
-                governance_details,
-                workload_hash
-            ))
+            """,
+                (run_id, f"{step_name}_{task_id}", governance_details, workload_hash),
+            )
 
             if not self.conn:
                 conn.commit()
@@ -142,7 +144,6 @@ class TaskCapacityManager:
 
 
 if __name__ == "__main__":
-    # Self-contained operational sanity validation check
     manager = TaskCapacityManager()
     dummy_run = f"RUN_{uuid.uuid4().hex[:8].upper()}"
     mock_workloads = [100, 250, 500]
