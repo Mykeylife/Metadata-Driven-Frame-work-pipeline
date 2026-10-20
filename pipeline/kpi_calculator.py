@@ -13,7 +13,7 @@ def process_aggregate_metrics(
 ) -> list[Any]:
     """Validates records, extracts depths, and pushes analytics safely down to targets."""
     valid_users = []
-    
+
     for u in users:
         # Gracefully handle legacy test strings, production rows, or dictionary types
         if isinstance(u, str):
@@ -39,7 +39,7 @@ def process_aggregate_metrics(
     usernames = [u["username"] for u in valid_users if u.get("username")]
     if not usernames:
         return []
-        
+
     max_len = max(len(name) for name in usernames)
 
     from .repository import insert_analytics_kpi, insert_summary_metric
@@ -50,22 +50,19 @@ def process_aggregate_metrics(
     for name in usernames:
         if cursor:
             insert_analytics_kpi(cursor, name, len(name))
-            
+
     return valid_users
 
 
 def compute_user_kpis(*args: Any, **kwargs: Any) -> Any:
-    """Backward-compatibility wrapper for legacy unit test suites.
-
-    Intercepts loose positional/keyword args and routes safely to the production engine.
-    """
+    """Backward-compatibility wrapper for legacy unit test suites."""
     cursor = args[0] if len(args) > 0 else (kwargs.get("cursor") or None)
     users = args[1] if len(args) > 1 else (kwargs.get("users") or [])
-    
+
     # Pre-emptively return empty list if users input is empty to pass legacy assertions
     if users == []:
         return []
-        
+
     validator = (
         args[2] if len(args) > 2 
         else kwargs.get("validator") or DataQualityValidator()
