@@ -13,6 +13,9 @@ jobs:
     steps:
     - name: Checkout Repository
       uses: actions/checkout@v4
+      with:
+        # Give GitHub Actions permission to push code updates back to the repo
+        token: ${{ secrets.GITHUB_TOKEN }}
 
     - name: Set up Python
       uses: actions/setup-python@v5
@@ -43,12 +46,23 @@ jobs:
     - name: Safe Sync and Install Dependencies
       run: poetry install --no-interaction --no-root --sync --with dev
 
-    - name: Automatic Code Formatting
+    - name: Automatic Code Formatting & Commit
       run: |
-        # Automatically clean up formatting issues before verification steps run
+        # Format the files
         poetry run black .
         poetry run ruff check . --fix
         poetry run ruff format .
+        
+        # Commit and push formatting fixes back to your branch if files changed
+        git config --global user.name "github-actions[bot]"
+        git config --global user.email "github-actions[bot]@users.noreply.github.com"
+        if [ -n "$(git status --porcelain)" ]; then
+          git add .
+          git commit -m "style: automated code formatting updates"
+          git push
+        else
+          echo "No formatting changes needed."
+        fi
 
     - name: Run Code Linters & Formatters
       run: |
