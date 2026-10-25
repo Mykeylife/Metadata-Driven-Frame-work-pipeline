@@ -30,10 +30,18 @@ def seed_operational_matrix():
     cursor = conn.cursor()
 
     for task in tasks.get("steps", []):
-        cursor.execute("""
+        cursor.execute(
+            """
             INSERT OR IGNORE INTO pipeline_metadata (step_name, target_table, execution_order, is_active)
             VALUES (?, ?, ?, ?);
-        """, (task["step_name"], task["target_table"], task["execution_order"], task.get("is_active", 1)))
+        """,
+            (
+                task["step_name"],
+                task["target_table"],
+                task["execution_order"],
+                task.get("is_active", 1),
+            ),
+        )
 
     conn.commit()
     conn.close()

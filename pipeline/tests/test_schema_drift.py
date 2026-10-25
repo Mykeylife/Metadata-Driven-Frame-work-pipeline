@@ -1,5 +1,6 @@
 """Unit tests verifying structural schemas and checking formatting metrics compatibility."""
 
+
 def test_sql_ddl_matches_python_definition():
     """Asserts that the committed SQL file matches the active schema definition."""
     # FIXED: Follows strict open patterns

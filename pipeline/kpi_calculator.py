@@ -8,9 +8,7 @@ from .validators import DataQualityValidator
 logger = logging.getLogger("dag_runner.kpi_calculator")
 
 
-def process_aggregate_metrics(
-    cursor: Any, users: list[Any], validator: DataQualityValidator
-) -> list[Any]:
+def process_aggregate_metrics(cursor: Any, users: list[Any], validator: DataQualityValidator) -> list[Any]:
     """Validates records, extracts depths, and pushes analytics safely down to targets."""
     valid_users = []
 
@@ -26,14 +24,10 @@ def process_aggregate_metrics(
         if validator.validate_row_record("staging_users", row_dict):
             valid_users.append(row_dict)
         else:
-            logger.warning(
-                "Skipping individual corrupted data record inside staging sweep."
-            )
+            logger.warning("Skipping individual corrupted data record inside staging sweep.")
 
     if not valid_users:
-        logger.warning(
-            "No valid rows passed the data quality threshold for calculations."
-        )
+        logger.warning("No valid rows passed the data quality threshold for calculations.")
         return []
 
     usernames = [u["username"] for u in valid_users if u.get("username")]
@@ -63,9 +57,6 @@ def compute_user_kpis(*args: Any, **kwargs: Any) -> Any:
     if users == []:
         return []
 
-    validator = (
-        args[2] if len(args) > 2 
-        else kwargs.get("validator") or DataQualityValidator()
-    )
+    validator = args[2] if len(args) > 2 else kwargs.get("validator") or DataQualityValidator()
 
     return process_aggregate_metrics(cursor, users, validator)

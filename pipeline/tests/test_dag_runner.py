@@ -94,9 +94,10 @@ def test_dag_runner_successful_execution_loop(clean_db_conn):
 
     runner = DAGRunner(pipeline_name="Ingestion-Engine-Validation")
 
-    with patch("sqlite3.connect", return_value=clean_db_conn), patch(
-        "pipeline.dag_runner.logger.info"
-    ) as mock_logger:
+    with (
+        patch("sqlite3.connect", return_value=clean_db_conn),
+        patch("pipeline.dag_runner.logger.info") as mock_logger,
+    ):
         runner.run()
         assert runner.status == "SUCCESS"
         mock_logger.assert_any_call("DAG step execution completed cleanly.")
@@ -117,9 +118,10 @@ def test_dag_runner_skips_invalid_corrupted_rows(clean_db_conn):
 
     runner = DAGRunner(pipeline_name="Data-Quality-Gating-Validation")
 
-    with patch("sqlite3.connect", return_value=clean_db_conn), patch(
-        "pipeline.kpi_calculator.logger.warning"
-    ) as mock_warn:
+    with (
+        patch("sqlite3.connect", return_value=clean_db_conn),
+        patch("pipeline.kpi_calculator.logger.warning") as mock_warn,
+    ):
         runner.run()
         assert runner.status == "SUCCESS"
         mock_warn.assert_any_call("Skipping individual corrupted data record inside staging sweep.")
@@ -166,11 +168,10 @@ def test_dag_runner_safety_barrier_empty_staging_users(clean_db_conn):
 
     runner = DAGRunner(pipeline_name="Empty-Staging-Safety-Validation")
 
-    with patch("sqlite3.connect", return_value=clean_db_conn), patch(
-        "pipeline.dag_runner.logger.error"
-    ) as mock_error:
+    with (
+        patch("sqlite3.connect", return_value=clean_db_conn),
+        patch("pipeline.dag_runner.logger.error") as mock_error,
+    ):
         runner.run()
         assert runner.status == "FAILED"
-        mock_error.assert_any_call(
-            "Safety guard triggered: 'staging_users' is completely empty. Halting pipeline."
-        )
+        mock_error.assert_any_call("Safety guard triggered: 'staging_users' is completely empty. Halting pipeline.")

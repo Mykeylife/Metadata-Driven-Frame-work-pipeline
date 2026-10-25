@@ -79,7 +79,11 @@ class DAGRunner:
 
                 # Baseline telemetry initialization
                 repository.log_pipeline_telemetry(
-                    cursor, self.run_id, step_name, "RUNNING", licensing_governance="MIT-Data-Asset-v1"
+                    cursor,
+                    self.run_id,
+                    step_name,
+                    "RUNNING",
+                    licensing_governance="MIT-Data-Asset-v1",
                 )
 
                 # Variables to hold calculated governance metrics
@@ -93,7 +97,12 @@ class DAGRunner:
                         error_msg = "Safety guard triggered: 'staging_users' is completely empty. Halting pipeline."
                         logger.error(error_msg)
                         repository.log_pipeline_telemetry(
-                            cursor, self.run_id, step_name, "FAILED", error_message=error_msg, quality_score=0.0
+                            cursor,
+                            self.run_id,
+                            step_name,
+                            "FAILED",
+                            error_message=error_msg,
+                            quality_score=0.0,
                         )
                         self.status = "FAILED"
                         break

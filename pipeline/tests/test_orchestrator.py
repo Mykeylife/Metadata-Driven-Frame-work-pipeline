@@ -14,12 +14,18 @@ def test_fetch_active_steps_with_seeded_metadata(clean_db_conn):
     )
     clean_db_conn.commit()
 
-    with patch("pipeline.orchestrator.DB_PATH", ":memory:"), patch("sqlite3.connect", return_value=clean_db_conn):
+    with (
+        patch("pipeline.orchestrator.DB_PATH", ":memory:"),
+        patch("sqlite3.connect", return_value=clean_db_conn),
+    ):
         steps = fetch_active_steps()
         assert len(steps) > 0
 
 
 def test_execute_pipeline_exits_safely_if_empty(clean_db_conn):
     """Verifies the engine stops cleanly if no tasks are enabled."""
-    with patch("pipeline.orchestrator.DB_PATH", ":memory:"), patch("sqlite3.connect", return_value=clean_db_conn):
+    with (
+        patch("pipeline.orchestrator.DB_PATH", ":memory:"),
+        patch("sqlite3.connect", return_value=clean_db_conn),
+    ):
         execute_pipeline()
