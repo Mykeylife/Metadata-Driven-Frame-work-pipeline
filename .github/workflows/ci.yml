@@ -43,9 +43,17 @@ jobs:
     - name: Safe Sync and Install Dependencies
       run: poetry install --no-interaction --no-root --sync --with dev
 
+    - name: Automatic Code Formatting
+      run: |
+        # Automatically clean up formatting issues before verification steps run
+        poetry run black .
+        poetry run ruff check . --fix
+        poetry run ruff format .
+
     - name: Run Code Linters & Formatters
       run: |
-        # Enforce strict compliance checks without altering code during transit
+        # Enforce strict compliance checks to verify everything is perfectly formatted
+        poetry run black . --check
         poetry run ruff check .
         poetry run ruff format --check .
 
