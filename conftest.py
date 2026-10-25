@@ -20,4 +20,3 @@ def clean_db_conn():
 
     yield conn
     conn.close()
-    
