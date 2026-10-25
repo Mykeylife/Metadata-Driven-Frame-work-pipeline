@@ -45,11 +45,11 @@ jobs:
 
     - name: Run Code Linters & Formatters
       run: |
-        # Strict verification check to prevent poorly formatted code from entering main
+        # Strict non-mutating compliance checks
         poetry run ruff check .
         poetry run ruff format --check .
 
     - name: Execute Test Suite with Coverage
       env:
-        PYTHONPATH: .
+        PYTHONPATH: .:pipeline
       run: poetry run pytest --cov=pipeline --cov-report=term-missing --cov-fail-under=70
