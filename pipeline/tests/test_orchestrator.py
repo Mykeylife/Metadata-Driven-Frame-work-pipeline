@@ -1,6 +1,7 @@
 """Unit tests verifying metadata orchestrator main routing conditions."""
 
 from unittest.mock import patch
+
 import pytest
 
 from pipeline.orchestrator import execute_pipeline, fetch_active_steps
@@ -32,5 +33,7 @@ def test_execute_pipeline_exits_safely_if_empty(clean_db_conn):
         # Assert that the orchestrator terminates with the expected RuntimeError when empty
         with pytest.raises(RuntimeError) as exc_info:
             execute_pipeline()
-        
-        assert "DAG runner terminated with an unexpected status" in str(exc_info.value)
+
+        assert "DAG runner terminated with an unexpected status" in str(
+            exc_info.value
+        )
