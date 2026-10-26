@@ -40,7 +40,9 @@ def clean_db_conn():
     """
     )
     # REPAIRED: Removed restrictive NOT NULL to allow data quality test paths to seed bad records safely
-    cursor.execute("CREATE TABLE staging_users (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT);")
+    cursor.execute(
+        "CREATE TABLE staging_users (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT);"
+    )
     cursor.execute(
         "CREATE TABLE analytics_kpis (kpi_id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT, "
         "username_length INTEGER, processed_at TEXT);"
@@ -52,7 +54,7 @@ def clean_db_conn():
 
     # Fully matched structural data governance columns
     cursor.execute(
-        自由 = """
+        """
         CREATE TABLE pipeline_execution_logs (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             run_id TEXT NOT NULL,
@@ -124,7 +126,9 @@ def test_dag_runner_skips_invalid_corrupted_rows(clean_db_conn):
     ):
         runner.run()
         assert runner.status == "SUCCESS"
-        mock_warn.assert_any_call("Skipping individual corrupted data record inside staging sweep.")
+        mock_warn.assert_any_call(
+            "Skipping individual corrupted data record inside staging sweep."
+        )
 
 
 def test_dag_runner_halts_if_all_rows_fail_validation(clean_db_conn):
@@ -134,7 +138,9 @@ def test_dag_runner_halts_if_all_rows_fail_validation(clean_db_conn):
         "INSERT INTO pipeline_metadata (step_name, target_table, execution_order, is_active) VALUES (?, ?, ?, ?);",
         ("Aggregate Analytics Metrics", "summary_metrics", 10, 1),
     )
-    cursor.execute("INSERT INTO staging_users (id, username) VALUES (?, ?);", (1, ""))
+    cursor.execute(
+        "INSERT INTO staging_users (id, username) VALUES (?, ?);", (1, "")
+    )
     clean_db_conn.commit()
 
     runner = DAGRunner(pipeline_name="All-Corrupted-Payload-Validation")
@@ -154,7 +160,6 @@ def test_dag_runner_aborts_on_failed_boot_schema(clean_db_conn):
 
     with patch("sqlite3.connect", return_value=clean_db_conn):
         runner.run()
-        # FIX: The orchestration logic sets state to FAILED when database boot checks collapse
         assert runner.status == "FAILED"
 
 
@@ -175,4 +180,6 @@ def test_dag_runner_safety_barrier_empty_staging_users(clean_db_conn):
     ):
         runner.run()
         assert runner.status == "FAILED"
-        mock_error.assert_any_call("Safety guard triggered: 'staging_users' is completely empty. Halting pipeline.")
+        mock_error.assert_any_call(
+            "Safety guard triggered: 'staging_users' is completely empty. Halting pipeline."
+        )
