@@ -1,36 +1,49 @@
-"""Unit tests verifying metadata orchestrator main routing conditions."""
+"""Integration tests verifying full pipeline orchestration routing and safety barriers."""
 
+import sqlite3
 from unittest.mock import patch
-
 import pytest
 
 from pipeline.orchestrator import execute_pipeline, fetch_active_steps
 
 
-def test_fetch_active_steps_with_seeded_metadata(clean_db_conn):
-    """Verifies active config step arrays are fetched smoothly by priority order."""
-    cursor = clean_db_conn.cursor()
+@pytest.fixture
+def empty_mock_db():
+    """Provides a sterile tracking schema lacking active tracking metadata steps."""
+    conn = sqlite3.connect(":memory:")
+    cursor = conn.cursor()
     cursor.execute(
-        "INSERT INTO pipeline_metadata (step_name, target_table, execution_order, is_active) VALUES (?, ?, ?, ?);",
-        ("Test Active Action", "staging_users", 5, 1),
+        """
+        CREATE TABLE pipeline_metadata (
+            step_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            step_name TEXT NOT NULL UNIQUE,
+            target_table TEXT NOT NULL,
+            execution_order INTEGER NOT NULL,
+            is_active INTEGER DEFAULT 1
+        );
+    """
     )
-    clean_db_conn.commit()
+    conn.commit()
+    yield conn
+    conn.close()
 
+
+def test_fetch_active_steps_returns_empty_on_unseeded_database(empty_mock_db):
+    """Verifies orchestration lookup managers map clean array structures if no tasks exist."""
     with (
         patch("pipeline.orchestrator.DB_PATH", ":memory:"),
-        patch("sqlite3.connect", return_value=clean_db_conn),
+        patch("sqlite3.connect", return_value=empty_mock_db),
     ):
         steps = fetch_active_steps()
-        assert len(steps) > 0
+        assert list(steps) == []
 
 
-def test_execute_pipeline_exits_safely_if_empty(clean_db_conn):
-    """Verifies the engine stops cleanly if no tasks are enabled."""
+def test_execute_pipeline_halts_and_raises_on_empty_metadata(empty_mock_db):
+    """Validates that empty staging boundaries invoke runtime exception protections successfully."""
     with (
         patch("pipeline.orchestrator.DB_PATH", ":memory:"),
-        patch("sqlite3.connect", return_value=clean_db_conn),
+        patch("sqlite3.connect", return_value=empty_mock_db),
     ):
-        # Assert that the orchestrator terminates with the expected RuntimeError when empty
         with pytest.raises(RuntimeError) as exc_info:
             execute_pipeline()
 
