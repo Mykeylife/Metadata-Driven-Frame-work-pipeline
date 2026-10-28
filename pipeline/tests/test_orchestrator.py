@@ -2,6 +2,7 @@
 
 import sqlite3
 from unittest.mock import patch
+
 import pytest
 
 from pipeline.orchestrator import execute_pipeline, fetch_active_steps
