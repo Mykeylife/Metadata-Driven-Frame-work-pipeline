@@ -11,22 +11,32 @@ from typing import Any
 try:
     from pipeline.config import get_db_path
 except ModuleNotFoundError:
-    from config import get_db_path
+    from config import get_db_path  # type: ignore[no-redef]
 
 # Configure clean local logging framework
-logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s"
+)
 logger = logging.getLogger("task_manager")
 
 
 class TaskCapacityManager:
     """Manages structural data pipeline work units to maximize capacity processing logs."""
 
-    def __init__(self, db_connection: sqlite3.Connection | None = None, db_path: str = "") -> None:
+    def __init__(
+        self,
+        db_connection: sqlite3.Connection | None = None,
+        db_path: str = "",
+    ) -> None:
         # Support both the test suite's connection injector and the standalone db_path initializer
         self.conn: sqlite3.Connection | None = db_connection
-        self.db_path: str = db_path if db_path else (db_path if db_connection else get_db_path())
+        self.db_path: str = (
+            db_path if db_path else (db_path if db_connection else get_db_path())
+        )
 
-    def register_engineering_task(self, run_id: str, step_name: str, payload_size: int) -> str:
+    def register_engineering_task(
+        self, run_id: str, step_name: str, payload_size: int
+    ) -> str:
         """Registers a clear, traceable unit of pipeline task work into the telemetry database."""
         task_id = f"TASK_{uuid.uuid4().hex[:8].upper()}"
 
@@ -47,23 +57,26 @@ class TaskCapacityManager:
 
             # Measure biometrics performance footprints live
             end_time = time.perf_counter()
-            end_ru = resource.getrusage(resource.RUSAGE_SELF) if resource else None
+            end_ru = (
+                resource.getrusage(resource.RUSAGE_SELF) if resource else None
+            )
 
             duration_ms = (end_time - start_time) * 1000
             cpu_time = (
-                (end_ru.ru_utime - start_ru.ru_utime) + (end_ru.ru_stime - start_ru.ru_stime)
+                (end_ru.ru_utime - start_ru.ru_utime)
+                + (end_ru.ru_stime - start_ru.ru_stime)
                 if (end_ru and start_ru)
                 else 0.0
             )
             peak_memory = end_ru.ru_maxrss if end_ru else 0
 
             # Build an explicit details payload to fit all footprint profiling metadata into the schema
-            governance_details = (
-                f"{message} | Duration: {duration_ms:.2f}ms | Peak Memory: {peak_memory} KB | CPU Time: {cpu_time:.4f}s"
-            )
+            governance_details = f"{message} | Duration: {duration_ms:.2f}ms | Peak Memory: {peak_memory} KB | CPU Time: {cpu_time:.4f}s"
 
             # Create a deterministic mock hash block for the tracked workload row data
-            workload_hash = hashlib.sha256(governance_details.encode("utf-8")).hexdigest()
+            workload_hash = hashlib.sha256(
+                governance_details.encode("utf-8")
+            ).hexdigest()
 
             # Map parameters perfectly to your operational data governance schema columns
             cursor.execute(
@@ -73,14 +86,22 @@ class TaskCapacityManager:
                     data_lineage_hash, quality_score, licensing_governance
                 ) VALUES (?, ?, 'SUCCESS', datetime('now'), ?, ?, 1.0, 'MIT-Data-Asset-v1')
             """,
-                (run_id, f"{step_name}_{task_id}", governance_details, workload_hash),
+                (
+                    run_id,
+                    f"{step_name}_{task_id}",
+                    governance_details,
+                    workload_hash,
+                ),
             )
 
             if not self.conn:
                 conn.commit()
                 conn.close()
 
-            logger.info("Successfully registered execution pipeline milestone task: %s", task_id)
+            logger.info(
+                "Successfully registered execution pipeline milestone task: %s",
+                task_id,
+            )
             return task_id
 
         except sqlite3.Error as error:
@@ -149,4 +170,6 @@ if __name__ == "__main__":
     mock_workloads = [100, 250, 500]
     print("Simulating engineering throughput tasks processing logs...")
     completed = manager.process_task_batch(dummy_run, mock_workloads)
-    print(f"Task Capacity Audit completed successfully! Total structural tasks locked: {completed}")
+    print(
+        f"Task Capacity Audit completed successfully! Total structural tasks locked: {completed}"
+    )
