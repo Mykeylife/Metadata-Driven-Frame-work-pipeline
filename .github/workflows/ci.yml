@@ -43,6 +43,11 @@ jobs:
     - name: Safe Sync and Install Dependencies
       run: poetry install --no-interaction --no-root --sync --with dev
 
+    - name: Enforce Static Type Analysis (Mypy)
+      run: |
+        # Run static type compliance validation before executing testing suites
+        poetry run mypy . --ignore-missing-imports
+
     - name: Run Code Linters & Formatters
       run: |
         # Strict non-mutating compliance checks
