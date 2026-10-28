@@ -2,6 +2,7 @@
 
 import sqlite3
 from unittest.mock import patch
+
 import pytest
 
 from pipeline.dag_runner import DAGRunner
@@ -85,7 +86,6 @@ def test_dag_runner_idempotency_on_sequential_replays(stable_mock_db):
         assert first_pass_count == 1
 
         # Second execution pass (simulating a backfill or rerun operation)
-        # Using a custom query pattern to handle unique constraints elegantly via REPLACE or updates
         cursor.execute(
             """
             INSERT OR REPLACE INTO pipeline_execution_logs 
