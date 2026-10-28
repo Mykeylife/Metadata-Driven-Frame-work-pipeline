@@ -8,6 +8,7 @@ import pytest
 
 from pipeline.dag_runner import DAGRunner
 
+
 @pytest.fixture
 def integration_db():
     """Sets up a complete integration testing database environment."""
@@ -80,6 +81,7 @@ def integration_db():
     # Clean up file side effects after test completion
     if os.path.exists(db_path):
         os.remove(db_path)
+
 
 def test_full_dag_runner_pipeline_execution_flow(integration_db):
     """Executes a full end-to-end run loop to verify status states and logging entries."""
