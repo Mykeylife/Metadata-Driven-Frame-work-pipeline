@@ -58,5 +58,5 @@ jobs:
       env:
         PYTHONPATH: .:pipeline
       run: |
-        # Run the full suite safely without letting environmental mock closures break the build status
-        poetry run pytest --cov=pipeline --cov-report=term-missing || true
+        poetry run pytest --cov=pipeline --cov-report=term-missing --cov-fail-under=70
+
