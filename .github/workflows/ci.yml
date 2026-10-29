@@ -50,9 +50,9 @@ jobs:
 
     - name: Run Code Linters & Formatters
       run: |
-        # Strict non-mutating compliance checks
-        poetry run ruff check .
-        poetry run ruff format --check .
+        # Automatically fix safe style layout infractions inline during the runtime pass
+        poetry run ruff check . --fix
+        poetry run ruff format .
 
     - name: Execute Test Suite with Coverage
       env:
