@@ -88,8 +88,8 @@ def test_dag_runner_idempotency_on_sequential_replays(stable_mock_db):
         # Second execution pass (simulating a backfill or rerun operation)
         cursor.execute(
             """
-            INSERT OR REPLACE INTO pipeline_execution_logs 
-            (run_id, step_name, status, execution_time) 
+            INSERT OR REPLACE INTO pipeline_execution_logs
+            (run_id, step_name, status, execution_time)
             VALUES (?, ?, ?, ?);
         """,
             ("RUN_123", "Aggregate Analytics Metrics", "SUCCESS", "0.02s"),
