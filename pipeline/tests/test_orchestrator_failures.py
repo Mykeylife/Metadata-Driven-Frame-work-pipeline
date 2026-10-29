@@ -5,7 +5,7 @@ from unittest.mock import patch
 
 import pytest
 
-from pipeline.dag_runner import DAGRunner  # Adjust import if needed to match your orchestrator instance class
+from pipeline.dag_runner import DAGRunner
 
 
 @pytest.fixture
@@ -59,20 +59,18 @@ def test_orchestrator_failure_path_and_database_state_rollback(stable_mock_db_wi
     """Verifies that processing failures gracefully roll back database operations and log a FAILED state."""
     runner = DAGRunner(pipeline_name="Failure-Validation-Engine")
 
-    # Target an inner data-alteration execution method within your runner to mock a runtime crash
-    # Adjust target string 'pipeline.dag_runner.DAGRunner._execute_step_logic' if your processing method name differs
     with patch("sqlite3.connect", return_value=stable_mock_db_with_data):
         with patch("pipeline.dag_runner.DAGRunner.run") as mock_run:
             # Simulate a system exception occurring mid-run execution
             mock_run.side_effect = RuntimeError("Simulated internal database engine communication loss.")
-            
+
             # Execute pipeline step and assert the runner intercepts the panic state gracefully or logs it
             with pytest.raises(RuntimeError):
                 runner.run()
 
         # Manually verify or write the transactional exception handler's final expected mutations to metadata
         cursor = stable_mock_db_with_data.cursor()
-        
+
         # Verify transaction integrity: staging_users must remain clean if the batch crashed
         cursor.execute("SELECT COUNT(*) as user_count FROM staging_users;")
         assert cursor.fetchone()["user_count"] == 0, "State corruption: uncommitted user writes were not rolled back."
