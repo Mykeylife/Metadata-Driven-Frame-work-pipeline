@@ -22,26 +22,17 @@ def stable_mock_db():
             step_name TEXT NOT NULL UNIQUE,
             target_table TEXT NOT NULL,
             execution_order INTEGER NOT NULL,
+            status TEXT DEFAULT 'PENDING',
             is_active INTEGER DEFAULT 1
         );
     """
     )
     cursor.execute(
-        "CREATE TABLE staging_users (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT);"
+        "CREATE TABLE IF NOT EXISTS staging_users (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT);"
     )
     cursor.execute(
         """
-        CREATE TABLE summary_metrics (
-            summary_id INTEGER PRIMARY KEY AUTOINCREMENT,
-            metric_name TEXT NOT NULL UNIQUE,
-            metric_value TEXT,
-            calculated_at TEXT
-        );
-    """
-    )
-    cursor.execute(
-        """
-        CREATE TABLE pipeline_execution_logs (
+        CREATE TABLE IF NOT EXISTS pipeline_execution_logs (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             run_id TEXT NOT NULL,
             step_name TEXT NOT NULL,
@@ -56,13 +47,10 @@ def stable_mock_db():
     """
     )
 
-    # Seed metadata tasks and user profiles
+    # Seed metadata tasks to satisfy the initialization health checks
     cursor.execute(
         "INSERT INTO pipeline_metadata (step_name, target_table, execution_order, is_active) VALUES (?, ?, ?, ?);",
         ("Aggregate Analytics Metrics", "summary_metrics", 10, 1),
-    )
-    cursor.execute(
-        "INSERT INTO staging_users (username) VALUES (?);", ("idempotent_test_user",)
     )
     conn.commit()
 
