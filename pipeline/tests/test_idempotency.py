@@ -8,9 +8,9 @@ import pytest
 from pipeline.dag_runner import DAGRunner
 
 
-@pytest.fixture
-def stable_mock_db():
-    """Establishes an in-memory control database with unique tracking indices."""
+def test_dag_runner_idempotency_on_sequential_replays():
+    """Verifies that executing the same run context consecutively enforces replay constraints."""
+    # Create an isolated connection directly inside the test context to avoid closed database errors
     conn = sqlite3.connect(":memory:")
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
@@ -54,16 +54,11 @@ def stable_mock_db():
     )
     conn.commit()
 
-    yield conn
-    conn.close()
-
-
-def test_dag_runner_idempotency_on_sequential_replays(stable_mock_db):
-    """Verifies that executing the same run context consecutively enforces replay constraints."""
     runner = DAGRunner(pipeline_name="Idempotency-Validation-Engine")
 
-    with patch("sqlite3.connect", return_value=stable_mock_db), \
+    with patch("sqlite3.connect", return_value=conn), \
          patch("pipeline.config.get_db_path", return_value=":memory:"):
+        
         # First execution pass
         runner.run()
         if runner.status != "SUCCESS":
@@ -71,11 +66,9 @@ def test_dag_runner_idempotency_on_sequential_replays(stable_mock_db):
         assert runner.status == "SUCCESS"
 
         # Capture initial run logging bounds
-        cursor = stable_mock_db.cursor()
         cursor.execute("SELECT COUNT(*) as log_count FROM pipeline_execution_logs;")
         first_pass_count = cursor.fetchone()["log_count"]
         
-        # Inject run record to mock log execution history state safely if table is fresh
         if first_pass_count == 0:
             cursor.execute(
                 """
@@ -84,7 +77,7 @@ def test_dag_runner_idempotency_on_sequential_replays(stable_mock_db):
                 """,
                 ("RUN_123", "Aggregate Analytics Metrics", "SUCCESS", "0.02s"),
             )
-            stable_mock_db.commit()
+            conn.commit()
 
         # Second execution pass (simulating a backfill or rerun operation)
         cursor.execute(
@@ -95,9 +88,11 @@ def test_dag_runner_idempotency_on_sequential_replays(stable_mock_db):
         """,
             ("RUN_123", "Aggregate Analytics Metrics", "SUCCESS", "0.02s"),
         )
-        stable_mock_db.commit()
+        conn.commit()
 
         cursor.execute("SELECT COUNT(*) as log_count FROM pipeline_execution_logs;")
         second_pass_count = cursor.fetchone()["log_count"]
 
         assert second_pass_count <= 2
+
+    conn.close()
