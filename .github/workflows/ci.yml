@@ -59,4 +59,4 @@ jobs:
         PYTHONPATH: .:pipeline
       run: |
         poetry run pytest --cov=pipeline --cov-report=term-missing --cov-fail-under=70
-
+        
